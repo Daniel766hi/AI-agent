@@ -195,6 +195,40 @@ def test_screen_deflation_charges_for_every_asset():
     assert fifty_assets > one_asset, "screening more assets must cost significance"
 
 
+
+def test_dashboard_serves_app_shell():
+    """The shell must ship all four views and both navs in the initial HTML."""
+    os.environ["DASHBOARD_TOKEN"] = "test-token-value"
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "web"))
+    import importlib
+    import app as dashboard
+    importlib.reload(dashboard)
+
+    client = dashboard.app.test_client()
+    client.post("/login", data={"token": "test-token-value"})
+    html = client.get("/").get_data(as_text=True)
+
+    for view in ("overview", "costs", "validation", "trades"):
+        assert f'id="view-{view}"' in html, f"missing view: {view}"
+        assert f'data-view="{view}"' in html, f"missing tab: {view}"
+    assert html.count('role="tablist"') == 2, "needs both desktop tabs and mobile tab bar"
+    assert 'href="#i-' in html, "icons must be inline SVG symbols, not emoji"
+
+
+def test_dashboard_has_no_emoji_icons():
+    """The design rules forbid emoji as icons; SVG symbols only."""
+    html = (Path(__file__).resolve().parent.parent / "web" / "templates" / "index.html").read_text()
+    # Emoji live well above the BMP punctuation range; flag any such codepoint.
+    offenders = [c for c in html if ord(c) > 0x2100 and c not in "—–…’‘“”×·≥≤"]
+    assert not offenders, f"emoji/pictographs found in template: {offenders[:5]}"
+
+
+def test_dashboard_respects_reduced_motion():
+    html = (Path(__file__).resolve().parent.parent / "web" / "templates" / "index.html").read_text()
+    assert "prefers-reduced-motion" in html, "animation must be disableable"
+    assert ":focus-visible" in html, "keyboard focus must stay visible"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

@@ -298,8 +298,16 @@ python web/app.py                          # prints an access token
 DASHBOARD_TOKEN=... python web/app.py      # stable token across restarts
 ```
 
-Live position, equity, drawdown, trade history, and on-demand walk-forward
-validation with an equity curve. Polls every 15s. Works at phone width.
+An app shell with four views — Overview, Costs, Validation, Trades — as top
+tabs on desktop and a bottom tab bar on mobile. Each view is a real history
+entry, so the browser back button works and a view can be linked directly
+(`#costs`). Polls every 15s, with a live/stale/stopped indicator in the bar.
+
+Built to the app-UI rules: SVG icons rather than emoji, 44px minimum touch
+targets, visible keyboard focus, `prefers-reduced-motion` honoured, and every
+table in its own scroll container so the page never scrolls sideways. Committed
+to dark — an ops console read in long sessions — with green and red reserved for
+state, never decoration.
 
 **Access control.** It binds to `127.0.0.1`, so only processes on your machine can
 reach it at all — that is the real boundary, and it needs no password to be
