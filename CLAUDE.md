@@ -23,6 +23,11 @@ asked:
   windows only. Never report in-sample numbers as results. Fold signals are
   stitched and backtested in one pass — never one backtest per fold, which
   forces the position flat at each seam and fabricates a round trip there.
+- **The significance test is calibrated, and must stay that way.** Changing
+  anything in `block_bootstrap_pvalue` or `_block_length` means re-running
+  `tests/test_validate.py`, which asserts the false-positive rate under the
+  null. A test that finds edges in noise makes every verdict in the repo
+  worthless.
 - **Deflation for search.** Any p-value must be charged for every configuration
   tried — and in a screen, for every asset too (`assets x configs`). A raw
   p-value next to a searched grid is a lie.
