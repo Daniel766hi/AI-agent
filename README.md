@@ -90,6 +90,52 @@ A strategy is worth paper-trading only if the **deflated** p-value is below 0.05
 Even then it is not proof. It means the result survived a deliberately hostile
 test on historical data. Markets change, and a backtest cannot see that coming.
 
+## Data sources
+
+| Source | Covers | Key needed |
+|---|---|---|
+| `data.fetch_binance()` | Binance spot pairs (BTCUSDT, ETHUSDT, ...) | no |
+| `data.fetch_coingecko()` | thousands of coins by slug ("bitcoin", "solana") | no |
+| `data.coingecko_top(n)` | top n coin ids by market cap — a screening universe | no |
+| `data.fetch_yahoo()` | equities and crypto: `BBCA.JK`, `TLKM.JK`, `AAPL`, `BTC-USD` | no |
+| `data.load_csv()` | anything with a date and close column | — |
+
+IDX tickers take a `.JK` suffix. CoinGecko's free tier allows roughly 10-30
+calls a minute; the fetchers cache to `data/` so a repeated screen costs nothing.
+
+These were written against each API's documented response shape and their
+parsers are unit-tested against captured payloads, but **none has been run
+against the live endpoints** — this sandbox's network policy blocks them. Expect
+to fix a field name or two on first real use.
+
+**Ajaib is not supported.** There is no public Ajaib market-data or trading API
+that I can point you at, scraping a broker's private endpoints generally breaches
+their terms, and automating an account without an official API puts the account
+at risk. Yahoo gives you the same IDX prices legitimately. For automated
+execution on Indonesian equities you need a broker that publishes a trading API.
+
+## Screening many assets
+
+```bash
+python screen.py --yahoo BBCA.JK TLKM.JK ASII.JK BBRI.JK --strategy breakout
+python screen.py --coingecko-top 30 --strategy sma_cross
+python screen.py --synthetic 120 --strategy breakout     # the null, for calibration
+```
+
+Screening is where backtests do their worst lying, so the screener is built
+around one correction. Testing 120 assets with 3 configs each is **360 trials**,
+and at 360 trials something will look brilliant by chance. The output shows both
+numbers side by side:
+
+```
+Asset                    Sharpe  vs hold    Return    MaxDD   p (naive)  p (honest)
+noise_066                 -0.45    -1.34    -41.8%   -65.0%      0.0578      0.9992
+```
+
+That asset is pure synthetic noise. Per-asset it looks near-significant; charged
+for the whole screen it is nothing. Run `--synthetic N` at your real screen size
+occasionally — it tells you what your setup produces from noise alone.
+
 ## Paper and live trading
 
 ```bash

@@ -116,6 +116,85 @@ def test_backtest_api_rejects_path_traversal():
     assert response.status_code == 400, "must refuse to read files outside the project"
 
 
+
+
+# --- Data fetchers -----------------------------------------------------------
+# The APIs are unreachable from this sandbox, so these exercise the response
+# PARSING against captured payload shapes. They do not prove the live endpoints
+# still return these shapes.
+
+def _mock_response(payload, status=200):
+    from unittest.mock import MagicMock
+    r = MagicMock()
+    r.status_code = status
+    r.json.return_value = payload
+    r.raise_for_status.return_value = None
+    return r
+
+
+def test_coingecko_parses_market_chart():
+    from unittest.mock import patch
+    from quant import data
+    payload = {"prices": [[1700000000000, 37000.5], [1700086400000, 37500.25],
+                          [1700172800000, 36800.0]]}
+    with tempfile.TemporaryDirectory() as tmp, \
+         patch("quant.data.requests.get", return_value=_mock_response(payload)):
+        df = data.fetch_coingecko("bitcoin", days=3, cache_dir=tmp)
+    assert list(df["close"]) == [37000.5, 37500.25, 36800.0]
+    assert df.index.is_monotonic_increasing
+
+
+def test_coingecko_rate_limit_message():
+    from unittest.mock import patch
+    from quant import data
+    with tempfile.TemporaryDirectory() as tmp, \
+         patch("quant.data.requests.get", return_value=_mock_response({}, status=429)):
+        try:
+            data.fetch_coingecko("bitcoin", cache_dir=tmp)
+        except RuntimeError as exc:
+            assert "rate limit" in str(exc).lower()
+            return
+    raise AssertionError("429 must raise a clear rate-limit error")
+
+
+def test_yahoo_parses_chart_and_drops_nulls():
+    from unittest.mock import patch
+    from quant import data
+    payload = {"chart": {"error": None, "result": [{
+        "timestamp": [1700000000, 1700086400, 1700172800, 1700259200],
+        "indicators": {"quote": [{"close": [9250.0, None, 9300.0, 9275.0]}]},
+    }]}}
+    with tempfile.TemporaryDirectory() as tmp, \
+         patch("quant.data.requests.get", return_value=_mock_response(payload)):
+        df = data.fetch_yahoo("BBCA.JK", cache_dir=tmp)
+    assert list(df["close"]) == [9250.0, 9300.0, 9275.0], "null closes must be dropped, not zero-filled"
+
+
+def test_yahoo_reports_bad_ticker():
+    from unittest.mock import patch
+    from quant import data
+    payload = {"chart": {"error": {"code": "Not Found", "description": "No data found"}, "result": None}}
+    with tempfile.TemporaryDirectory() as tmp, \
+         patch("quant.data.requests.get", return_value=_mock_response(payload)):
+        try:
+            data.fetch_yahoo("NOTATICKER", cache_dir=tmp)
+        except RuntimeError as exc:
+            assert "NOTATICKER" in str(exc)
+            return
+    raise AssertionError("a bad ticker must raise, not return empty data")
+
+
+def test_screen_deflation_charges_for_every_asset():
+    """The whole point of the screener: more assets must mean a harsher p-value."""
+    from quant.validate import deflate
+    p_raw = 0.02
+    one_asset = deflate(p_raw, 3)          # 3 configs, 1 asset
+    fifty_assets = deflate(p_raw, 3 * 50)  # same configs, 50 assets
+    assert one_asset < 0.10, one_asset
+    assert fifty_assets > 0.90, fifty_assets
+    assert fifty_assets > one_asset, "screening more assets must cost significance"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
