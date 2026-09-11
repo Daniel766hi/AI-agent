@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trading dashboard</title>
+<style>
+  :root { color-scheme: dark; --bg:#0d1117; --panel:#161b22; --line:#30363d; --text:#e6edf3;
+          --dim:#8b949e; --accent:#2f81f7; --good:#3fb950; --bad:#f85149; --warn:#d29922; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font:15px/1.5 ui-sans-serif,system-ui,-apple-system,sans-serif; padding:16px; }
+  .wrap { max-width:1100px; margin:0 auto; }
+  header { display:flex; flex-wrap:wrap; gap:12px; align-items:baseline;
+           justify-content:space-between; padding-block:8px 20px; }
+  h1 { font-size:18px; margin:0; }
+  a { color:var(--dim); font-size:13px; }
+  .grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px; }
+  .label { color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+  .value { font:600 22px/1.3 ui-monospace,SFMono-Regular,monospace; margin-top:6px; }
+  .good{color:var(--good)} .bad{color:var(--bad)} .warn{color:var(--warn)} .dim{color:var(--dim)}
+  section { margin-top:24px; }
+  h2 { font-size:14px; color:var(--dim); text-transform:uppercase; letter-spacing:.06em; margin:0 0 10px; }
+  .scroll { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font:13px/1.5 ui-monospace,monospace; }
+  th,td { text-align:right; padding:7px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th:first-child,td:first-child { text-align:left; }
+  th { color:var(--dim); font-weight:500; font-size:11px; text-transform:uppercase; }
+  .banner { padding:12px 16px; border-radius:8px; margin-bottom:16px; font-size:14px; }
+  .banner.halt { background:rgba(248,81,73,.12); border:1px solid var(--bad); color:var(--bad); }
+  .banner.info { background:rgba(47,129,247,.1); border:1px solid var(--accent); }
+  .banner.warn { background:rgba(210,153,34,.12); border:1px solid var(--warn); color:var(--warn); }
+  select,button { padding:8px 12px; border-radius:6px; border:1px solid var(--line);
+                  background:var(--panel); color:var(--text); font-size:13px; cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  .controls { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+  .verdict { font-size:15px; font-weight:600; padding:12px 16px; border-radius:8px; margin-bottom:12px; }
+  .verdict.pass { background:rgba(63,185,80,.12); border:1px solid var(--good); color:var(--good); }
+  .verdict.fail { background:rgba(210,153,34,.12); border:1px solid var(--warn); color:var(--warn); }
+  svg { width:100%; height:180px; display:block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Trading dashboard</h1>
+    <a href="/logout">Sign out</a>
+  </header>
+
+  <div id="banner"></div>
+  <div class="grid" id="tiles"></div>
+
+  <section>
+    <h2>Recent trades</h2>
+    <div class="scroll"><table id="trades">
+      <thead><tr><th>Time</th><th>Side</th><th>Units</th><th>Price</th><th>Notional</th><th>Equity after</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>Walk-forward validation</h2>
+    <div class="controls">
+      <select id="strategy">
+        {% for s in strategies %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+      </select>
+      <button class="primary" id="run">Run validation</button>
+      <span id="status" class="dim" style="align-self:center"></span>
+    </div>
+    <div id="result"></div>
+  </section>
+</div>
+
+<script>
+const fmtMoney = v => v == null ? "--" : "$" + v.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtPct   = v => v == null || isNaN(v) ? "--" : (v*100).toFixed(1) + "%";
+const cls      = v => v == null || isNaN(v) ? "dim" : v > 0 ? "good" : v < 0 ? "bad" : "";
+
+function tile(label, value, klass="") {
+  return `<div class="card"><div class="label">${label}</div><div class="value ${klass}">${value}</div></div>`;
+}
+
+async function refresh() {
+  let s;
+  try { s = await (await fetch("/api/state")).json(); }
+  catch { return; }
+
+  const banner = document.getElementById("banner");
+  const tiles = document.getElementById("tiles");
+
+  if (!s.running) {
+    banner.innerHTML = `<div class="banner info">${s.message}</div>`;
+    tiles.innerHTML = ""; return;
+  }
+
+  banner.innerHTML =
+    (s.halted ? `<div class="banner halt"><strong>HALTED</strong> &mdash; ${s.halt_reason}</div>` : "") +
+    (s.stale && !s.halted ? `<div class="banner warn">State is over 2 hours old &mdash; is trade.py still running?</div>` : "") +
+    (s.last_error ? `<div class="banner warn">Last tick errored: ${s.last_error}</div>` : "") +
+    (s.mode === "live" ? `<div class="banner halt"><strong>LIVE</strong> &mdash; real money.</div>`
+                       : `<div class="banner info"><strong>PAPER</strong> &mdash; simulated, no real money.</div>`);
+
+  tiles.innerHTML =
+    tile("Equity", fmtMoney(s.equity)) +
+    tile("Position", fmtPct(s.position_fraction), s.position_fraction > 0 ? "good" : "dim") +
+    tile(s.halted ? "Target (not acted on)" : "Target", fmtPct(s.target_position),
+         s.halted ? "dim" : s.target_position > 0 ? "good" : "dim") +
+    tile(s.symbol, fmtMoney(s.price)) +
+    tile("Drawdown", fmtPct(s.drawdown_pct/100), cls(s.drawdown_pct)) +
+    tile("Cash", fmtMoney(s.cash), "dim") +
+    tile("Trades", s.n_trades ?? 0, "dim") +
+    tile("Strategy", s.strategy, "dim");
+
+  document.querySelector("#trades tbody").innerHTML = (s.trades || []).slice().reverse().map(t =>
+    `<tr><td>${t.time}</td><td class="${t.side === "BUY" ? "good" : "bad"}">${t.side}</td>
+     <td>${t.units}</td><td>${fmtMoney(t.price)}</td><td>${fmtMoney(t.notional)}</td>
+     <td>${fmtMoney(t.equity_after)}</td></tr>`).join("")
+    || `<tr><td colspan="6" class="dim">No trades yet.</td></tr>`;
+}
+
+function sparkline(strat, bench) {
+  const all = strat.concat(bench), lo = Math.min(...all), hi = Math.max(...all), span = hi - lo || 1;
+  const path = series => series.map((v,i) =>
+    `${i ? "L" : "M"}${(i/(series.length-1)*100).toFixed(2)},${(100-(v-lo)/span*100).toFixed(2)}`).join("");
+  return `<svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img"
+    aria-label="Out-of-sample equity curve versus buy and hold">
+    <path d="${path(bench)}" fill="none" stroke="#8b949e" stroke-width="0.6" vector-effect="non-scaling-stroke"/>
+    <path d="${path(strat)}" fill="none" stroke="#2f81f7" stroke-width="1.2" vector-effect="non-scaling-stroke"/>
+  </svg>
+  <div class="label" style="margin-top:6px">
+    <span style="color:#2f81f7">&#9473;</span> strategy (out-of-sample)
+    &nbsp; <span style="color:#8b949e">&#9473;</span> buy &amp; hold</div>`;
+}
+
+document.getElementById("run").onclick = async () => {
+  const strategy = document.getElementById("strategy").value;
+  const status = document.getElementById("status");
+  const result = document.getElementById("result");
+  status.textContent = "Running walk-forward…"; result.innerHTML = "";
+
+  const r = await (await fetch(`/api/backtest?strategy=${encodeURIComponent(strategy)}`)).json();
+  status.textContent = "";
+  if (r.error) { result.innerHTML = `<div class="banner halt">${r.error}</div>`; return; }
+
+  const m = r.strategy_metrics, b = r.benchmark_metrics;
+  result.innerHTML =
+    `<div class="verdict ${r.passed ? "pass" : "fail"}">
+       ${r.passed ? "Survives out-of-sample. Worth paper-trading — not proof."
+                  : "No significant edge. Expected for most strategies. Do not risk money on it."}
+     </div>
+     <div class="card" style="margin-bottom:12px">${sparkline(r.equity_curve, r.benchmark_curve)}</div>
+     <div class="scroll"><table>
+       <thead><tr><th>Metric</th><th>Strategy (OOS)</th><th>Buy &amp; hold</th></tr></thead>
+       <tbody>
+         <tr><td>CAGR</td><td class="${cls(m.cagr)}">${fmtPct(m.cagr)}</td><td>${fmtPct(b.cagr)}</td></tr>
+         <tr><td>Sharpe</td><td class="${cls(m.sharpe)}">${m.sharpe.toFixed(2)}</td><td>${b.sharpe.toFixed(2)}</td></tr>
+         <tr><td>Max drawdown</td><td class="bad">${fmtPct(m.max_drawdown)}</td><td>${fmtPct(b.max_drawdown)}</td></tr>
+         <tr><td>Total return</td><td class="${cls(m.total_return)}">${fmtPct(m.total_return)}</td><td>${fmtPct(b.total_return)}</td></tr>
+         <tr><td>Raw p-value</td><td colspan="2">${r.p_raw.toFixed(4)}</td></tr>
+         <tr><td>After ${r.n_trials} configs searched</td>
+             <td colspan="2" class="${r.p_deflated < 0.05 ? "good" : "warn"}">${r.p_deflated.toFixed(4)}</td></tr>
+       </tbody>
+     </table></div>
+     <p class="label" style="margin-top:10px">Dataset: ${r.dataset}</p>`;
+};
+
+refresh(); setInterval(refresh, 15000);
+</script>
+</body>
+</html>

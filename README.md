@@ -90,10 +90,68 @@ A strategy is worth paper-trading only if the **deflated** p-value is below 0.05
 Even then it is not proof. It means the result survived a deliberately hostile
 test on historical data. Markets change, and a backtest cannot see that coming.
 
+## Paper and live trading
+
+```bash
+python trade.py --strategy sma_cross --mode paper --poll 3600
+```
+
+Paper mode simulates fills with the **same cost model as the backtest**, so paper
+results are comparable to backtest results rather than flattering to them. State
+persists to `data/`, survives restarts, and is what the dashboard reads.
+
+Live mode places real orders on Binance spot and has to get past five gates:
+
+| Gate | Why |
+|---|---|
+| `--yes-real-money` | No accidental live run from shell history |
+| `BINANCE_API_KEY` / `_SECRET` in env | Never on the command line, never in a file |
+| `--max-notional` | Caps every single order; clamped, never silently exceeded |
+| Walk-forward validation passes | Refuses to trade a strategy with no measured edge |
+| `--max-drawdown` kill switch | Flattens and halts; does not average down |
+
+```bash
+export BINANCE_API_KEY=... BINANCE_API_SECRET=...
+python trade.py --strategy sma_cross --mode live \
+  --validate-csv data/BTCUSDT_1d.csv --max-notional 50 --max-drawdown 15 --yes-real-money
+```
+
+The validation gate is overridable with `--skip-validation`, which prints
+`You are trading noise.` and means it.
+
+**The live broker has never placed a real order.** Its request signing is
+unit-tested against Binance's published example vector, but nothing else on that
+path has run against the exchange. Point `BINANCE_API_URL` at
+`https://testnet.binance.vision` and read every fill before you trust it with
+real funds. Restrict your API key to spot trading, never enable withdrawals, and
+IP-allowlist it.
+
+## Dashboard
+
+```bash
+python web/app.py                          # prints an access token
+DASHBOARD_TOKEN=... python web/app.py      # stable token across restarts
+```
+
+Live position, equity, drawdown, trade history, and on-demand walk-forward
+validation with an equity curve. Polls every 15s. Works at phone width.
+
+**Access control.** It binds to `127.0.0.1`, so only processes on your machine can
+reach it at all — that is the real boundary, and it needs no password to be
+effective. On top of that, every route requires a 256-bit token compared in
+constant time, and the API returns 401 rather than redirecting. `--host 0.0.0.0`
+prints a warning; if you want it from your phone, use an SSH tunnel or Tailscale
+rather than a public bind, and put HTTPS in front of it. Flask's dev server is
+not a production server.
+
+Set `DASHBOARD_SECRET` as well as `DASHBOARD_TOKEN` if you want sessions to
+survive a restart.
+
 ## Deliberately not built
 
-No live trading, no exchange keys, no order execution. Paper-trade first, and
-wire up real capital only with out-of-sample numbers in front of you.
+Multi-user accounts, a hosted deployment, and order types beyond market orders.
+No profit guarantee, because none exists: this measures strategies honestly, it
+does not make them work.
 
 Also skipped: portfolio-level allocation, position sizing beyond flat/long/short,
 intraday microstructure, short borrow costs. Add them when a validated strategy
