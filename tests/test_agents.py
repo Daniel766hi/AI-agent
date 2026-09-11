@@ -5,6 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from quant import data
+from quant.strategies import REGISTRY
 from quant.agents import (Agent, CostAgent, Decision, Desk, Proposal, ResearchAgent,
                           RiskAgent, SkepticAgent, Verdict)
 
@@ -127,6 +128,57 @@ def test_summary_names_every_vetoing_agent():
     text = decision.summary()
     assert "REJECTED" in text and "no" in text
     assert "always refuses" in text
+
+
+
+def test_misordered_roster_fails_at_construction():
+    """A wiring mistake must not masquerade as a verdict about the trade."""
+    for roster in ([SkepticAgent(), ResearchAgent()], [SkepticAgent()], [CostAgent()],
+                   [RiskAgent(), ResearchAgent()]):
+        try:
+            Desk(roster)
+        except ValueError as exc:
+            assert "needs" in str(exc) and "provides" in str(exc)
+            continue
+        raise AssertionError(f"roster {[a.name for a in roster]} should not have built")
+
+
+def test_correct_order_builds():
+    Desk([ResearchAgent(), SkepticAgent(), CostAgent(), RiskAgent()])
+    Desk([ResearchAgent(), RiskAgent()])          # a subset is fine if deps are met
+
+
+def test_pinned_params_are_what_gets_validated():
+    """Approving parameters on evidence about different parameters is unsound."""
+    close = data.synthetic_regimes(seed=2)["close"]
+    proposal = Proposal(symbol="T", strategy="ts_momentum", close=close,
+                        params={"lookback": 30})
+    Desk().evaluate(proposal)
+
+    assert proposal.params == {"lookback": 30}, "the caller's choice must survive"
+    assert proposal.evidence["folds"].iloc[-1]["params"] == {"lookback": 30}, \
+        "the evidence must describe the parameters actually being traded"
+
+
+def test_pinning_is_charged_one_trial_not_the_whole_grid():
+    """No search means no multiple-testing penalty — and searching means one."""
+    close = data.synthetic_regimes(seed=2)["close"]
+
+    pinned = Proposal(symbol="T", strategy="ts_momentum", close=close, params={"lookback": 30})
+    Desk().evaluate(pinned)
+    assert pinned.evidence["n_trials"] == 1
+
+    searched = Proposal(symbol="T", strategy="ts_momentum", close=close)
+    Desk().evaluate(searched)
+    assert searched.evidence["n_trials"] == len(REGISTRY["ts_momentum"][1]["lookback"])
+    assert searched.evidence["n_trials"] > pinned.evidence["n_trials"]
+
+
+def test_agents_declare_what_they_need_and_produce():
+    for agent in Desk().agents:
+        assert isinstance(agent.requires, tuple) and isinstance(agent.provides, tuple)
+    assert ResearchAgent().requires == (), "research consumes no evidence; it produces it"
+    assert "p_raw" in ResearchAgent().provides
 
 
 if __name__ == "__main__":

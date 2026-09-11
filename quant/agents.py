@@ -50,10 +50,18 @@ class Verdict:
 
 
 class Agent:
-    """One mandate, one judgement. Subclasses implement review()."""
+    """One mandate, one judgement. Subclasses implement review().
+
+    `requires` names the evidence keys this agent needs another agent to have
+    produced. The desk checks these when it is built, so a mis-ordered roster
+    fails loudly at construction instead of quietly returning a rejection that
+    is about the wiring rather than the trade.
+    """
 
     name = "agent"
     mandate = ""
+    requires = ()
+    provides = ()
 
     def review(self, proposal: Proposal) -> Verdict:
         raise NotImplementedError
@@ -74,32 +82,46 @@ class ResearchAgent(Agent):
 
     name = "research"
     mandate = "find the best out-of-sample parameters, and show the working"
+    provides = ("p_raw", "n_trials", "oos_returns", "benchmark_returns",
+                "strategy_metrics", "benchmark_metrics", "folds")
 
     def __init__(self, folds=4):
         self.folds = folds
 
     def review(self, proposal):
         fn, grid = REGISTRY[proposal.strategy]
+
+        # Pinned parameters are validated as given, not searched past. Otherwise
+        # the evidence describes the grid's best fit while everything
+        # downstream trades the caller's choice — approving one thing on the
+        # strength of another. Pinning also means one trial, not len(grid):
+        # you did not search, so you are not charged for searching. That is only
+        # honest if the parameters were chosen before seeing this data, which
+        # the code cannot check and the caller must.
+        pinned = bool(proposal.params)
+        search_grid = {k: [v] for k, v in proposal.params.items()} if pinned else grid
+
         try:
             oos, folds, benchmark, n_trials = walk_forward(
-                proposal.close, fn, grid, n_folds=self.folds)
+                proposal.close, fn, search_grid, n_folds=self.folds)
         except ValueError as exc:
             return self._veto(f"cannot validate: {exc}")
 
         p_raw, edge = block_bootstrap_pvalue(oos, benchmark)
         strat, bench = metrics(oos), metrics(benchmark)
 
-        proposal.params = proposal.params or folds.iloc[-1]["params"]
+        proposal.params = folds.iloc[-1]["params"]     # what the evidence describes
         proposal.evidence.update({
             "oos_returns": oos, "benchmark_returns": benchmark,
             "p_raw": p_raw, "n_trials": n_trials, "daily_edge": edge,
             "strategy_metrics": strat, "benchmark_metrics": bench,
             "folds": folds,
         })
+        verb = "validated pinned" if pinned else "fitted"
         return self._ok(
-            f"fitted {proposal.params}, OOS Sharpe {strat['sharpe']:.2f} "
+            f"{verb} {proposal.params}, OOS Sharpe {strat['sharpe']:.2f} "
             f"vs {bench['sharpe']:.2f} holding",
-            sharpe=strat["sharpe"], params=proposal.params)
+            sharpe=strat["sharpe"], params=proposal.params, searched=n_trials)
 
 
 class SkepticAgent(Agent):
@@ -112,6 +134,8 @@ class SkepticAgent(Agent):
 
     name = "skeptic"
     mandate = "assume it is noise; demand the evidence survive the search that found it"
+    requires = ("p_raw", "n_trials", "strategy_metrics", "benchmark_metrics")
+    provides = ("p_deflated",)
 
     def __init__(self, alpha=0.05):
         self.alpha = alpha
@@ -149,6 +173,8 @@ class CostAgent(Agent):
 
     name = "cost"
     mandate = "confirm the edge exceeds what it costs to trade"
+    requires = ("strategy_metrics", "benchmark_metrics")
+    provides = ("breakeven",)
 
     def __init__(self, fee_bps=DEFAULT_FEE_BPS, slippage_bps=DEFAULT_SLIPPAGE_BPS):
         self.fee_bps = fee_bps
@@ -193,6 +219,8 @@ class RiskAgent(Agent):
 
     name = "risk"
     mandate = "ensure a bad run cannot end the account"
+    requires = ("oos_returns",)
+    provides = ("kelly", "ruin_probability")
 
     def __init__(self, max_ruin_probability=0.05, ruin_drawdown=0.50):
         self.max_ruin = max_ruin_probability
@@ -258,6 +286,19 @@ class Desk:
 
     def __init__(self, agents=None):
         self.agents = agents or [ResearchAgent(), SkepticAgent(), CostAgent(), RiskAgent()]
+        self._check_roster()
+
+    def _check_roster(self):
+        """Fail at construction if an agent runs before its evidence exists."""
+        available = set()
+        for agent in self.agents:
+            missing = sorted(set(agent.requires) - available)
+            if missing:
+                raise ValueError(
+                    f"{agent.name!r} needs {missing} but no earlier agent provides it. "
+                    f"Order the desk so producers run before consumers."
+                )
+            available.update(agent.provides)
 
     def evaluate(self, proposal: Proposal) -> Decision:
         verdicts = []
