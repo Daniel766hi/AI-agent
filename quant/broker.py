@@ -9,6 +9,7 @@ import hmac
 import json
 import time
 import urllib.parse
+from decimal import ROUND_FLOOR, Decimal
 from pathlib import Path
 
 import requests
@@ -139,6 +140,7 @@ class BinanceBroker:
         self.base_url = base_url
         self.max_notional = max_notional
         self.trades = []
+        self._info = None
 
     def _sign(self, params):
         query = urllib.parse.urlencode(params)
@@ -161,6 +163,55 @@ class BinanceBroker:
             raise RuntimeError(f"Binance {response.status_code}: {response.text[:300]}")
         return response.json()
 
+    def symbol_info(self):
+        """Base/quote assets and lot rules, from the exchange rather than guessed.
+
+        Splitting a pair by string length is wrong the moment the quote asset is
+        not four characters: ETHBTC parses as ET/HBTC, balances come back zero,
+        and the trader silently does nothing while appearing healthy. Ask.
+        """
+        if self._info is not None:
+            return self._info
+
+        data = self._request("GET", "/api/v3/exchangeInfo",
+                             {"symbol": self.symbol}, signed=False)
+        entries = data.get("symbols") or []
+        if not entries:
+            raise RuntimeError(f"Binance does not list symbol {self.symbol!r}")
+        entry = entries[0]
+
+        filters = {f.get("filterType"): f for f in entry.get("filters", [])}
+        lot = filters.get("LOT_SIZE", {})
+        notional = filters.get("NOTIONAL") or filters.get("MIN_NOTIONAL") or {}
+
+        self._info = {
+            "base": entry["baseAsset"],
+            "quote": entry["quoteAsset"],
+            "step": float(lot.get("stepSize", 0) or 0),
+            "min_qty": float(lot.get("minQty", 0) or 0),
+            "min_notional": float(notional.get("minNotional", MIN_NOTIONAL) or MIN_NOTIONAL),
+        }
+        return self._info
+
+    def _round_step(self, quantity):
+        """Round DOWN to the symbol's lot step.
+
+        Binance rejects an order whose quantity does not sit on the step, and
+        rounding up can ask for more than the balance covers.
+        """
+        step = self.symbol_info()["step"]
+        if step <= 0:
+            return quantity
+
+        # Decimal, not float: 0.01663 / 0.00001 evaluates to 1662.9999999999998
+        # in binary floating point, so flooring silently drops a whole step and
+        # an order meant to flatten the position leaves a sliver of it behind.
+        # The kill switch depends on "flatten" meaning flatten.
+        q = Decimal(str(quantity))
+        st = Decimal(str(step))
+        steps = (q / st).to_integral_value(rounding=ROUND_FLOOR)
+        return float(steps * st)
+
     def price(self):
         data = self._request("GET", "/api/v3/ticker/price",
                              {"symbol": self.symbol}, signed=False)
@@ -171,9 +222,9 @@ class BinanceBroker:
         return {b["asset"]: float(b["free"]) for b in account["balances"] if float(b["free"]) > 0}
 
     def _holdings(self):
-        base, quote = self.symbol[:-4], self.symbol[-4:]   # e.g. BTC / USDT
+        info = self.symbol_info()
         balances = self.balances()
-        return balances.get(base, 0.0), balances.get(quote, 0.0)
+        return balances.get(info["base"], 0.0), balances.get(info["quote"], 0.0)
 
     def equity(self, price):
         units, cash = self._holdings()
@@ -198,18 +249,24 @@ class BinanceBroker:
             delta_units = min(delta_units, affordable)
             notional = delta_units * price
 
-        if notional < max(MIN_NOTIONAL, DUST_FRACTION * equity):
+        info = self.symbol_info()
+        if notional < max(info["min_notional"], DUST_FRACTION * equity):
             return None
         if self.max_notional and notional > self.max_notional:
             # Hard cap at the trust boundary: clamp, never silently exceed.
             delta_units = (self.max_notional / price) * (1 if delta_units > 0 else -1)
             notional = self.max_notional
 
+        side = "BUY" if delta_units > 0 else "SELL"
+        quantity = self._round_step(abs(delta_units))
+        if quantity <= 0 or quantity < info["min_qty"]:
+            return None                      # below the exchange's own lot minimum
+
         order = self._request("POST", "/api/v3/order", {
             "symbol": self.symbol,
-            "side": "BUY" if delta_units > 0 else "SELL",
+            "side": side,
             "type": "MARKET",
-            "quantity": f"{abs(delta_units):.6f}",
+            "quantity": quantity,
         })
 
         filled = float(order.get("executedQty", 0) or 0)
@@ -217,7 +274,7 @@ class BinanceBroker:
         trade = {
             "time": time.strftime("%Y-%m-%d %H:%M:%S"),
             "symbol": self.symbol,
-            "side": order.get("side"),
+            "side": order.get("side", side),
             "units": round(filled, 8),
             "price": round(spent / filled, 2) if filled else price,
             "notional": round(spent, 2),
