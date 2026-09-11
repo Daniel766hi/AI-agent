@@ -55,6 +55,65 @@ no exploitable structure by construction. `test_no_edge_on_random_walk` runs
 eight seeds through the full pipeline and fails if more than two show
 significance. If your engine finds edge in noise, it has a leak.
 
+## What profit would actually require
+
+```bash
+python analyze.py --csv data/BTCUSDT_1d.csv --strategy sma_cross
+```
+
+No backtest answers the questions that decide most outcomes, so `analyze.py`
+does. None of it predicts returns — it is arithmetic on the parts you control.
+
+**The frequency cliff.** Costs are the one guaranteed negative in trading, and
+they scale with how often you trade. At 15bps round trip:
+
+| Trading | Round trips/yr | Annual drag |
+|---|---|---|
+| monthly | 12 | 3.6% |
+| weekly | 52 | 15.6% |
+| daily | 250 | **75.0%** |
+| 4x daily | 1000 | 300.0% |
+
+Bitcoin's long-run return is roughly 40-60% a year. Trade it daily and you must
+out-earn a 75% headwind before making a single rupiah. This is why most active
+traders lose to people who did nothing — not because their strategies were
+worse, but because they paid the toll 250 times instead of once.
+
+**The hurdle.** A strategy sitting in cash part of the time forfeits the return
+it would have earned holding. `analyze.py` adds that to the cost drag and prints
+the total a strategy must beat to have been worth running.
+
+**Survival.** Ruin probabilities bootstrapped from the actual return
+distribution rather than a normal assumption, because fat tails are exactly what
+ruin calculations get wrong. On a 60%-volatility asset over one year:
+
+| Leverage | P(-20%) | P(-50%) | P(wiped out) |
+|---|---|---|---|
+| 1x | 88% | 11% | 0% |
+| 2x | 100% | 66% | 0% |
+| 3x | 100% | 91% | 2.7% |
+| 5x | 100% | 99.9% | **42%** |
+
+Leverage does not scale outcomes symmetrically. A wiped-out account cannot
+recover, so 5x is not "5x the returns" — it is a 42% chance of having nothing.
+
+**Position size.** Kelly sizing, with the caveat that matters: Kelly assumes the
+edge estimate is correct. It is an estimate from one sample, and if it is too
+high, full Kelly over-bets and loses money. When the estimated edge is negative
+the tool says the growth-optimal size is zero and to not trade it.
+
+## On guaranteed profit
+
+There isn't any, here or anywhere. A system that reliably printed money would be
+an arbitrage, and arbitrages close. Any backtest that looks like a guarantee is
+overfitted, and this repo is built to catch exactly that.
+
+What is actually within your control: trade less often, keep costs low, avoid
+leverage, size positions so a bad run cannot end you, and compare everything
+against simply holding the asset. Those are not consolation prizes — across
+large populations of traders they explain more of the outcome spread than
+strategy selection does.
+
 ## Layout
 
 | File | Role |
@@ -64,7 +123,9 @@ significance. If your engine finds edge in noise, it has a leak.
 | `quant/strategies.py` | Strategy functions + their parameter grids |
 | `quant/validate.py` | Walk-forward splits, block bootstrap, deflation |
 | `run.py` | CLI |
-| `tests/test_quant.py` | Self-checks, no framework needed |
+| `quant/risk.py` | Cost drag, break-even, ruin probability, Kelly |
+| `analyze.py` | What profit requires and what prevents it |
+| `tests/` | 42 self-checks across four files, no framework |
 
 ## Writing a strategy
 
