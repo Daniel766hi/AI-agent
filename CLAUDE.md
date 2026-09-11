@@ -29,6 +29,12 @@ asked:
 - **Live trading stays gated.** `--yes-real-money`, env credentials,
   `--max-notional`, passing validation, drawdown kill switch. Five gates. Do not
   quietly relax one.
+- **Alerting is best-effort, never load-bearing.** A dead webhook must not
+  change what the trader does. The kill switch has a test asserting it still
+  fires with alerting pointed at a dead port.
+- **A supervisor must not restart a halt.** trade.py exits 0 on a kill-switch
+  stop so `Restart=on-failure` leaves it stopped. Never change that to
+  `Restart=always`.
 - **A halt outlives its process.** The drawdown halt and peak persist to the
   state file and reload on start. Never let a restart reset them — that hands a
   just-stopped strategy a fresh allowance to lose. Only `--reset` clears it.

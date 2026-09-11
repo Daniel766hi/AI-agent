@@ -303,6 +303,47 @@ path has run against the exchange. Point `BINANCE_API_URL` at
 real funds. Restrict your API key to spot trading, never enable withdrawals, and
 IP-allowlist it.
 
+## Running it unattended
+
+```bash
+export NOTIFY_WEBHOOK="https://hooks.slack.com/services/..."   # or a Discord webhook
+python trade.py --strategy sma_cross --mode paper --poll 3600
+```
+
+To survive reboots and crashes, use the supplied systemd unit rather than a
+terminal you have to keep open:
+
+```bash
+sudo cp deploy/trading-agent.service /etc/systemd/system/   # edit paths first
+sudo systemctl enable --now trading-agent
+journalctl -u trading-agent -f
+```
+
+**`Restart=on-failure`, deliberately not `always`.** A crash is worth retrying;
+a halt is not. `trade.py` exits 0 when the drawdown kill switch fires, so
+systemd leaves it stopped. Auto-restarting a strategy that just protected you
+is exactly the wrong behaviour at 3am. Secrets go in `/etc/trading-agent.env`
+(root, `chmod 600`) — never in the unit file or on the command line.
+
+### What it tells you
+
+An agent that runs for weeks has to stay quiet and then be unmissable, so only
+three things send:
+
+| Alert | When | Throttle |
+|---|---|---|
+| `[HALTED]` | The kill switch fired, or funds ran out | **Never throttled** |
+| `[DEGRADED]` | Three consecutive failed ticks — running but not trading | Hourly |
+| `[DAILY]` | Equity, position, drawdown, trade count | Once a day |
+
+There are no per-trade alerts by design. An alert you learn to ignore is worse
+than no alert.
+
+Alerting is best-effort and never fatal: with `NOTIFY_WEBHOOK` unset every call
+is a silent no-op, and an unreachable webhook is swallowed. A test asserts the
+kill switch still fires with the webhook pointed at a dead port — the safety
+stop must never depend on the notifier working.
+
 ## Dashboard
 
 ```bash

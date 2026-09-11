@@ -15,6 +15,7 @@ from quant import data
 from pathlib import Path
 
 from quant.live import STATE_FILE, Trader, make_broker
+from quant.notify import WEBHOOK_ENV, Notifier
 from quant.strategies import REGISTRY
 from quant.validate import block_bootstrap_pvalue, deflate, walk_forward
 
@@ -88,10 +89,21 @@ def main():
     trader = Trader(args.strategy, params, broker, args.symbol, args.interval,
                     max_drawdown_pct=args.max_drawdown)
 
+    notifier = Notifier()
     print(f"{args.mode.upper()}  {args.strategy}{params or ''}  {args.symbol} {args.interval}  "
-          f"halt at -{args.max_drawdown}%\n")
-    trader.run(poll_seconds=args.poll, max_ticks=args.ticks)
+          f"halt at -{args.max_drawdown}%")
+    print(f"alerts    {'on' if notifier.enabled else f'off (set {WEBHOOK_ENV} to enable)'}\n")
+    trader.notify = notifier
+    if notifier.enabled:
+        notifier.started(args.symbol, args.mode, args.strategy)
+    final = trader.run(poll_seconds=args.poll, max_ticks=args.ticks)
+
+    # Exit code is the contract with a process supervisor: 0 means "stopped on
+    # purpose, leave it stopped". A halted strategy must never be auto-restarted.
+    if final and final.get("halted"):
+        print("\nStopped by the drawdown kill switch. Investigate, then --reset to resume.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main() or 0)

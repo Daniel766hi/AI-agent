@@ -15,6 +15,7 @@ import requests
 
 from .backtest import DEFAULT_FEE_BPS, DEFAULT_SLIPPAGE_BPS
 from .broker import BinanceBroker, InsufficientFunds, PaperBroker
+from .notify import Notifier
 from .strategies import REGISTRY
 
 STATE_FILE = Path("data/live_state.json")
@@ -38,7 +39,7 @@ class Trader:
     """One strategy, one symbol, one broker, with kill switches."""
 
     def __init__(self, strategy, params, broker, symbol="BTCUSDT", interval="1d",
-                 max_drawdown_pct=20.0, state_file=STATE_FILE):
+                 max_drawdown_pct=20.0, state_file=STATE_FILE, notifier=None):
         if strategy not in REGISTRY:
             raise ValueError(f"unknown strategy {strategy!r}; have {sorted(REGISTRY)}")
         self.strategy_name = strategy
@@ -53,6 +54,8 @@ class Trader:
         self.halted = False
         self.halt_reason = None
         self.last_error = None
+        self.error_streak = 0
+        self.notify = notifier or Notifier()
         self._restore()
 
     def _restore(self):
@@ -90,6 +93,7 @@ class Trader:
             self.halted = True
             self.halt_reason = f"drawdown {drawdown:.1f}% breached -{self.max_drawdown_pct}% limit"
             target = 0.0
+            self.notify.halted(self.symbol, self.halt_reason, equity)
 
         trade = None
         if not self.halted or target == 0.0:
@@ -98,6 +102,7 @@ class Trader:
             except InsufficientFunds as exc:
                 self.halted = True
                 self.halt_reason = str(exc)
+                self.notify.halted(self.symbol, self.halt_reason, equity)
 
         state = {
             "updated": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -127,13 +132,18 @@ class Trader:
                 print(f"[{state['updated']}] {self.symbol} {state['price']:>10,.2f}  "
                       f"target {state['target_position']:.2f}  equity {state['equity']:>10,.2f}  {flag}")
                 self.last_error = None
+                self.error_streak = 0
+                self.notify.summary(state)
                 if state["halted"]:
                     print(f"  HALTED: {state['halt_reason']}")
                     return state
             except Exception as exc:               # a transient API error must not kill the loop
                 self.last_error = f"{type(exc).__name__}: {exc}"
-                print(f"  error: {self.last_error}")
+                self.error_streak += 1
+                print(f"  error ({self.error_streak} in a row): {self.last_error}")
                 traceback.print_exc()
+                # Running but not trading is a silent failure; say so after a few.
+                self.notify.errors(self.symbol, self.error_streak, self.last_error)
             ticks += 1
             if max_ticks is None or ticks < max_ticks:
                 time.sleep(poll_seconds)

@@ -1,0 +1,46 @@
+# Run the trading agent unattended.
+#
+#   1. Edit the paths, User, and options below.
+#   2. Put secrets in /etc/trading-agent.env, owned by root, chmod 600:
+#        NOTIFY_WEBHOOK=https://hooks.slack.com/services/...
+#        BINANCE_API_KEY=...        # live mode only
+#        BINANCE_API_SECRET=...     # live mode only
+#   3. sudo cp deploy/trading-agent.service /etc/systemd/system/
+#      sudo systemctl daemon-reload
+#      sudo systemctl enable --now trading-agent
+#      journalctl -u trading-agent -f
+#
+# Restart=on-failure deliberately: a crash is worth retrying, a clean exit is
+# not. The trader exits 0 when its drawdown kill switch fires, so systemd
+# leaves it stopped — restarting a halted strategy is exactly what you do not
+# want happening automatically at 3am.
+
+[Unit]
+Description=Trading agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=CHANGEME
+WorkingDirectory=/home/CHANGEME/AI-agent
+EnvironmentFile=/etc/trading-agent.env
+ExecStart=/usr/bin/python3 trade.py --strategy sma_cross --mode paper --poll 3600
+
+Restart=on-failure
+RestartSec=60
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+# The agent needs only its own directory and outbound network.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/CHANGEME/AI-agent/data
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
