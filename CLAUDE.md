@@ -20,7 +20,9 @@ asked:
 - **Costs on every position change.** Fees and slippage are charged on turnover.
   Never default them to zero outside a test that is specifically isolating them.
 - **Out-of-sample reporting.** Headline metrics come from walk-forward test
-  windows only. Never report in-sample numbers as results.
+  windows only. Never report in-sample numbers as results. Fold signals are
+  stitched and backtested in one pass — never one backtest per fold, which
+  forces the position flat at each seam and fabricates a round trip there.
 - **Deflation for search.** Any p-value must be charged for every configuration
   tried — and in a screen, for every asset too (`assets x configs`). A raw
   p-value next to a searched grid is a lie.

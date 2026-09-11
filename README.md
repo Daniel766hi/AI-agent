@@ -40,6 +40,12 @@ real broker penalises them. Raise it for illiquid alts.
 and traded on the window that follows — never on the bars they were fitted to.
 Reported metrics are stitched from out-of-sample windows only.
 
+The per-fold signals are stitched and backtested in a *single* pass. Running
+each fold as its own backtest forces the position flat at every seam, losing
+that bar's exposure and charging a re-entry, which moved the reported total
+return by about 2 percentage points — in either direction, depending on how the
+market happened to move across the seam.
+
 **Block-bootstrap significance.** Returns are autocorrelated and fat-tailed, so
 a t-test overstates confidence. A moving-block bootstrap resamples contiguous
 runs, preserving local dependence, and tests whether the edge over buy-and-hold

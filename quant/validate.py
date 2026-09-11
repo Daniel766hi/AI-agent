@@ -21,10 +21,15 @@ def walk_forward(close, strategy_fn, param_grid, n_folds=5, train_ratio=2.0,
                  fee_bps=10.0, slippage_bps=5.0, periods_per_year=365):
     """Rolling walk-forward: fit params on a training window, trade the next window.
 
-    Splits the series into `n_folds` test windows. Before each one, parameters
-    are chosen by Sharpe on the preceding training window only. The returns that
-    come back are stitched from test windows exclusively, so no bar contributed
-    to the parameters that traded it.
+    Splits the series into `n_folds` contiguous test windows. Before each one,
+    parameters are chosen by Sharpe on the preceding training window only, so no
+    bar contributed to the parameters that traded it.
+
+    The per-fold signals are stitched into one continuous series and backtested
+    ONCE over the whole out-of-sample span. Backtesting each fold separately
+    would force the position flat at every boundary — losing that bar's exposure
+    and charging a fresh entry — which shifts the reported return either way
+    depending on how the market moved across the seam.
     """
     close = pd.Series(close).astype(float)
     combos = _param_combos(param_grid)
@@ -39,7 +44,7 @@ def walk_forward(close, strategy_fn, param_grid, n_folds=5, train_ratio=2.0,
             "Use more history or fewer folds."
         )
 
-    oos_returns, fold_rows = [], []
+    signals, chosen = [], []
     for fold in range(n_folds):
         train_start = fold * test_len
         train_end = train_start + train_len
@@ -59,25 +64,36 @@ def walk_forward(close, strategy_fn, param_grid, n_folds=5, train_ratio=2.0,
 
         # Warm up indicators on training history, then keep only test-window bars.
         warmup = close.iloc[train_start:test_end]
-        signal = strategy_fn(warmup, **best).iloc[-len(test):]
-        result = backtest(test, signal, fee_bps, slippage_bps, periods_per_year)
+        signals.append(strategy_fn(warmup, **best).iloc[-len(test):])
+        chosen.append((fold, best, best_sharpe, train.index[0], test.index[0], test.index[-1]))
 
-        oos_returns.append(result["net_return"])
-        fold_rows.append({
-            "fold": fold,
-            "train_start": str(train.index[0].date()),
-            "test_start": str(test.index[0].date()),
-            "test_end": str(test.index[-1].date()),
-            "params": best,
-            "train_sharpe": round(best_sharpe, 3),
-            "test_sharpe": round(metrics(result["net_return"], periods_per_year)["sharpe"], 3),
-            "test_return": round(metrics(result["net_return"], periods_per_year)["total_return"], 4),
-        })
-
-    if not oos_returns:
+    if not signals:
         raise ValueError("No folds produced results; series too short.")
 
-    stitched = pd.concat(oos_returns)
+    stitched_signal = pd.concat(signals)
+    if stitched_signal.index.duplicated().any():
+        raise ValueError("walk-forward folds overlapped; test windows must be disjoint")
+
+    # One backtest across the whole out-of-sample span, so positions carry.
+    oos_close = close.loc[stitched_signal.index]
+    result = backtest(oos_close, stitched_signal, fee_bps, slippage_bps, periods_per_year)
+    stitched = result["net_return"]
+
+    fold_rows = []
+    for fold, best, best_sharpe, train_start, test_start, test_end in chosen:
+        segment = stitched.loc[test_start:test_end]
+        segment_m = metrics(segment, periods_per_year)
+        fold_rows.append({
+            "fold": fold,
+            "train_start": str(train_start.date()),
+            "test_start": str(test_start.date()),
+            "test_end": str(test_end.date()),
+            "params": best,
+            "train_sharpe": round(best_sharpe, 3),
+            "test_sharpe": round(segment_m["sharpe"], 3),
+            "test_return": round(segment_m["total_return"], 4),
+        })
+
     benchmark = close.pct_change().reindex(stitched.index).fillna(0.0)
     return stitched, pd.DataFrame(fold_rows), benchmark, len(combos)
 

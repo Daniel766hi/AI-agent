@@ -169,6 +169,63 @@ def test_positive_period_rate_is_not_a_trade_win_rate():
     assert n_exposed > n_trades, "periods and trades differ — that is why it was renamed"
 
 
+
+def test_walk_forward_carries_position_across_folds():
+    """No phantom round trip at a fold seam.
+
+    Backtesting folds separately forces the position flat at each boundary, so a
+    strategy holding straight through a seam would show a spurious exit and
+    re-entry. Turnover must match a single continuous backtest of the same
+    stitched signal.
+    """
+    close = data.synthetic(n=2000, seed=30)["close"]
+    fn, grid = REGISTRY["sma_cross"]
+    oos, folds, _, _ = walk_forward(close, fn, grid, n_folds=5)
+
+    # Rebuild the identical stitched signal and backtest it in one pass.
+    from quant.validate import _param_combos
+    n, combos = len(close), _param_combos(grid)
+    test_len = int(n / (5 + 2.0)); train_len = int(test_len * 2.0)
+    signals = []
+    for f in range(5):
+        ts, te = f * test_len, f * test_len + train_len
+        tend = min(te + test_len, n)
+        train, test = close.iloc[ts:te], close.iloc[te:tend]
+        best, bs = combos[0], float("-inf")
+        for params in combos:
+            sh = metrics(backtest(train, fn(train, **params))["net_return"])["sharpe"]
+            if sh > bs:
+                best, bs = params, sh
+        signals.append(fn(close.iloc[ts:tend], **best).iloc[-len(test):])
+
+    stitched_signal = pd.concat(signals)
+    one_pass = backtest(close.loc[stitched_signal.index], stitched_signal)
+    assert abs(float(one_pass["net_return"].sum()) - float(oos.sum())) < 1e-12, \
+        "walk-forward must equal one continuous backtest of the stitched signal"
+
+
+def test_walk_forward_oos_windows_are_contiguous():
+    """Stitched returns must be one unbroken span — no gaps, no overlaps."""
+    close = data.synthetic(n=2000, seed=31)["close"]
+    oos, folds, benchmark, _ = walk_forward(close, *REGISTRY["breakout"], n_folds=4)
+
+    assert not oos.index.duplicated().any(), "folds overlapped"
+    positions = close.index.get_indexer(oos.index)
+    assert (np.diff(positions) == 1).all(), "out-of-sample span has a gap"
+    assert len(benchmark) == len(oos)
+
+
+def test_fold_rows_sum_to_the_whole():
+    """Per-fold rows are slices of the same run, so they must tile it exactly."""
+    close = data.synthetic(n=1800, seed=32)["close"]
+    oos, folds, _, _ = walk_forward(close, *REGISTRY["sma_cross"], n_folds=4)
+
+    covered = 0
+    for _, row in folds.iterrows():
+        covered += len(oos.loc[row["test_start"]:row["test_end"]])
+    assert covered == len(oos), f"folds covered {covered} of {len(oos)} bars"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
