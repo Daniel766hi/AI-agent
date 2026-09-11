@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from quant import data                                                    # noqa: E402
 from quant.backtest import buy_and_hold, metrics                          # noqa: E402
 from quant.live import read_state                                         # noqa: E402
+from quant.risk import cost_drag, live_cost_report                        # noqa: E402
 from quant.strategies import REGISTRY                                     # noqa: E402
 from quant.validate import block_bootstrap_pvalue, deflate, walk_forward  # noqa: E402
 
@@ -32,6 +33,9 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
     PERMANENT_SESSION_LIFETIME=86400,
+    # Templates are cached when debug is off; this is a local tool you will edit,
+    # so pick up changes on refresh instead of needing a restart.
+    TEMPLATES_AUTO_RELOAD=True,
 )
 
 TOKEN = os.environ.get("DASHBOARD_TOKEN") or secrets.token_urlsafe(32)
@@ -93,6 +97,28 @@ def api_state():
         return jsonify({"running": False, "message": "No trader has run yet. Start trade.py."})
     stale = (time.time() - Path("data/live_state.json").stat().st_mtime) > 7200
     return jsonify({"running": True, "stale": stale, **state})
+
+
+@app.route("/api/costs")
+@require_auth
+def api_costs():
+    """What this run is paying to trade, versus what it would pay trading less."""
+    state = read_state()
+    if state is None:
+        return jsonify({"running": False})
+
+    report = live_cost_report(state.get("trades", []), state.get("equity") or 0.0)
+    pace = report.get("round_trips_per_year")
+    return jsonify({
+        "running": True,
+        **report,
+        "reference": [
+            {"label": "monthly", "round_trips": 12, "drag": cost_drag(12)},
+            {"label": "weekly", "round_trips": 52, "drag": cost_drag(52)},
+            {"label": "daily", "round_trips": 250, "drag": cost_drag(250)},
+        ],
+        "pace_drag": cost_drag(pace) if pace else None,
+    })
 
 
 @app.route("/api/backtest")

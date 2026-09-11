@@ -60,6 +60,11 @@
   </section>
 
   <section>
+    <h2>Cost of trading</h2>
+    <div id="costs"></div>
+  </section>
+
+  <section>
     <h2>Walk-forward validation</h2>
     <div class="controls">
       <select id="strategy">
@@ -165,7 +170,43 @@ document.getElementById("run").onclick = async () => {
      <p class="label" style="margin-top:10px">Dataset: ${r.dataset}</p>`;
 };
 
-refresh(); setInterval(refresh, 15000);
+async function refreshCosts() {
+  let c;
+  try { c = await (await fetch("/api/costs")).json(); } catch { return; }
+  const el = document.getElementById("costs");
+  if (!c.running) { el.innerHTML = `<p class="dim">No run yet.</p>`; return; }
+
+  const paceRow = c.confident
+    ? `<tr><td><strong>your pace</strong></td><td><strong>${c.round_trips_per_year}</strong></td>
+         <td class="${c.pace_drag > 0.15 ? "bad" : c.pace_drag > 0.05 ? "warn" : "good"}">
+         <strong>${fmtPct(c.pace_drag)}</strong></td></tr>`
+    : "";
+
+  el.innerHTML =
+    `<div class="grid" style="margin-bottom:12px">
+       ${tile("Costs paid", fmtMoney(c.total_cost), "bad")}
+       ${tile("Share of equity", c.cost_pct_equity == null ? "--" : fmtPct(c.cost_pct_equity), "dim")}
+       ${tile("Drag vs equity now", c.confident ? fmtPct(c.annual_drag) : "--",
+              c.annual_drag > 0.15 ? "bad" : "warn")}
+       ${tile("Running", c.days_running + "d", "dim")}
+     </div>
+     ${c.confident ? "" : `<div class="banner info">Too few trades over too few days to
+        annualise honestly — the projection appears once there are 4+ trades across a week.</div>`}
+     <div class="scroll"><table>
+       <thead><tr><th>Trading at</th><th>Round trips/yr</th><th>Annual cost drag</th></tr></thead>
+       <tbody>${paceRow}${c.reference.map(r =>
+         `<tr><td class="dim">${r.label}</td><td class="dim">${r.round_trips}</td>
+          <td class="dim">${fmtPct(r.drag)}</td></tr>`).join("")}</tbody>
+     </table></div>
+     <p class="label" style="margin-top:10px">
+        Table is the rate at 15bps. The tile divides costs actually paid by equity
+        <em>now</em>, so it runs higher when the account has shrunk &mdash; fees are a
+        bigger bite of a smaller balance. Costs are the one guaranteed negative:
+        trading daily costs 75%/yr against an asset returning 40&ndash;60%.</p>`;
+}
+
+refresh(); refreshCosts();
+setInterval(() => { refresh(); refreshCosts(); }, 15000);
 </script>
 </body>
 </html>

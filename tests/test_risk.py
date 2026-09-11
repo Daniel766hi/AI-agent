@@ -98,6 +98,42 @@ def test_leverage_table_shape():
     assert table["p_down_50pct"].is_monotonic_increasing, "risk must rise with leverage"
 
 
+
+def test_live_cost_report_annualises():
+    import time
+    from quant.risk import live_cost_report
+    now = time.time()
+    stamp = lambda days_ago: time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now - days_ago * 86400))
+    trades = [{"time": stamp(d), "cost": 1.0} for d in (90, 60, 30, 10)]
+
+    report = live_cost_report(trades, equity=1000.0)
+    assert report["confident"], "4 trades over 80 days should be enough to annualise"
+    assert report["total_cost"] == 4.0
+    assert 75 < report["days_running"] < 85
+    assert report["annual_drag"] > 0
+
+
+def test_live_cost_report_withholds_on_thin_history():
+    """Annualising two trades from one day produces a nonsense number. Refuse."""
+    from quant.risk import live_cost_report
+    thin = [{"time": "2026-09-01 00:00:00", "cost": 1.0},
+            {"time": "2026-09-01 06:00:00", "cost": 1.0}]
+    report = live_cost_report(thin, equity=1000.0)
+    assert not report["confident"], "one day of history must not be annualised confidently"
+
+    assert live_cost_report([], equity=1000.0)["n_trades"] == 0
+    assert live_cost_report([{"time": "2026-09-01 00:00:00", "cost": 1.0}],
+                            equity=1000.0)["annual_drag"] is None
+
+
+def test_live_cost_report_survives_missing_cost():
+    """Live broker trades carry cost=None; must not crash the dashboard."""
+    from quant.risk import live_cost_report
+    trades = [{"time": "2026-08-01 00:00:00", "cost": None},
+              {"time": "2026-09-01 00:00:00", "cost": 2.0}]
+    assert live_cost_report(trades, equity=500.0)["total_cost"] == 2.0
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

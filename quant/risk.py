@@ -102,3 +102,35 @@ def kelly_fraction(returns, periods_per_year=365):
         "half_kelly": kelly / 2.0,
         "annual_edge": float(r.mean() * periods_per_year),
     }
+
+
+def live_cost_report(trades, equity, periods_per_year=365):
+    """Cost drag from an actual run's trade log, for the dashboard.
+
+    Takes broker trade dicts (which carry `cost` and `time`) and current equity.
+    Annualises the observed pace rather than assuming one, so early in a run the
+    projection is honest about being an extrapolation from few trades.
+    """
+    priced = [t for t in trades if t.get("cost") is not None]
+    total_cost = sum(float(t["cost"]) for t in priced)
+
+    if len(trades) < 2:
+        return {"total_cost": round(total_cost, 2), "n_trades": len(trades),
+                "days_running": 0.0, "annual_drag": None, "round_trips_per_year": None,
+                "cost_pct_equity": None, "confident": False}
+
+    stamps = pd.to_datetime([t["time"] for t in trades], errors="coerce").dropna()
+    days = max((stamps.max() - stamps.min()).total_seconds() / 86400.0, 1e-9)
+    years = days / periods_per_year
+
+    # Under a day of history annualises to nonsense; say so rather than print it.
+    confident = days >= 7 and len(trades) >= 4
+    return {
+        "total_cost": round(total_cost, 2),
+        "n_trades": len(trades),
+        "days_running": round(days, 1),
+        "round_trips_per_year": round(len(trades) / 2 / years, 1) if years > 0 else None,
+        "annual_drag": round(total_cost / years / equity, 4) if equity > 0 and years > 0 else None,
+        "cost_pct_equity": round(total_cost / equity, 4) if equity > 0 else None,
+        "confident": confident,
+    }
