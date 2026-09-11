@@ -11,7 +11,7 @@ when that's the truth — which it usually is.
 
 ```bash
 pip install -r requirements.txt
-python tests/test_quant.py                          # 8 self-checks
+python tests/test_quant.py && python tests/test_strategies.py && python tests/test_trading.py
 python run.py --synthetic --strategy sma_cross      # random-walk sanity run
 ```
 
@@ -135,6 +135,43 @@ noise_066                 -0.45    -1.34    -41.8%   -65.0%      0.0578      0.9
 That asset is pure synthetic noise. Per-asset it looks near-significant; charged
 for the whole screen it is nothing. Run `--synthetic N` at your real screen size
 occasionally — it tells you what your setup produces from noise alone.
+
+## Risk sizing, and a finding that went against expectation
+
+`vol_target()` scales any strategy's position by (target volatility / recent
+realised volatility). The rationale is the one claim in empirical finance that
+holds up well: **volatility is persistent and forecastable; direction is not.**
+So size by the thing you can actually predict.
+
+To test that properly the repo has a second null. `data.synthetic_garch()`
+generates volatility clustering while keeping direction unforecastable — so a
+strategy that exploits clustering shows up, and one that just curve-fits does
+not. Verified: |return| autocorrelation 0.144 on GARCH vs -0.001 on plain GBM,
+with return autocorrelation ~0.015 on both.
+
+The prediction going in was that vol targeting would improve Sharpe on clustered
+data. **It did not** — measured over 40 paths, the Sharpe change was -0.02,
+statistically indistinguishable from zero. Return and risk scale down together.
+
+What it does deliver, same 40 paths:
+
+| | Unsized | Vol-targeted |
+|---|---|---|
+| Realised volatility | 59.2% | 41.3% (target: 40%) |
+| Max drawdown | -75.1% | -61.9% |
+| Volatility of volatility | 0.154 | 0.074 |
+| Shallower drawdown | — | **40 of 40 paths** |
+
+So it is risk control, not alpha, and the docstring now says exactly that. Use
+it to hold a risk budget you can live with, not to make money appear. The
+finding is pinned by `test_vol_target_claims_no_alpha`, which fails if a future
+change ever makes vol targeting look profitable on unforecastable data — that
+would mean a lookahead bug, not a discovery.
+
+`ts_momentum` is included on similar terms: time-series momentum is among the
+better-documented cross-asset effects (Moskowitz, Ooi & Pedersen 2012), usually
+attributed to slow information diffusion. A documented past effect is still not
+a promise about your data.
 
 ## Paper and live trading
 

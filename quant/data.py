@@ -167,3 +167,38 @@ def fetch_yahoo(symbol="BBCA.JK", range_="5y", interval="1d", cache_dir="data"):
     cache.parent.mkdir(parents=True, exist_ok=True)
     df.reset_index(names="date").to_csv(cache, index=False)
     return df
+
+
+def synthetic_garch(n=2000, annual_drift=0.0, base_annual_vol=0.6, alpha=0.10, beta=0.85,
+                    periods_per_year=365, seed=0, start_price=100.0):
+    """GBM's cousin, with volatility clustering — GARCH(1,1) innovations.
+
+    Real markets have calm stretches and violent ones, and that persistence is
+    forecastable in a way returns are not. This generator has NO predictable
+    drift or direction: mean return is still unforecastable. The only structure
+    is in the variance, which is exactly the premise volatility targeting rests
+    on. Comparing results here against `synthetic()` isolates whether a
+    strategy exploits vol clustering or is just curve-fitting.
+
+    alpha + beta < 1 keeps the variance process stationary.
+    """
+    if alpha + beta >= 1:
+        raise ValueError(f"alpha+beta must be < 1 for stationarity, got {alpha + beta}")
+
+    rng = np.random.default_rng(seed)
+    dt = 1.0 / periods_per_year
+    long_run_var = (base_annual_vol ** 2) * dt
+    omega = long_run_var * (1 - alpha - beta)
+
+    variance = long_run_var
+    shocks = np.empty(n)
+    prev_shock = 0.0
+    for i in range(n):
+        variance = omega + alpha * prev_shock**2 + beta * variance
+        prev_shock = rng.normal(0.0, np.sqrt(variance))
+        shocks[i] = prev_shock
+
+    drift = (annual_drift - 0.5 * base_annual_vol**2) * dt
+    close = start_price * np.exp(np.cumsum(drift + shocks))
+    idx = pd.date_range("2015-01-01", periods=n, freq="D")
+    return pd.DataFrame({"close": close}, index=idx)
