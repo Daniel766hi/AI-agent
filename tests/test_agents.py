@@ -181,6 +181,35 @@ def test_agents_declare_what_they_need_and_produce():
     assert "p_raw" in ResearchAgent().provides
 
 
+
+def test_risk_reports_when_the_kelly_cap_is_binding():
+    """A half-Kelly above 100% is a warning about the estimate, not a green light.
+
+    Reporting "size 100%" alone implies the figure was chosen; it was clamped.
+    """
+    close = data.synthetic_regimes(seed=2)["close"]
+    proposal = Proposal(symbol="T", strategy="ts_momentum", close=close)
+    decision = Desk().evaluate(proposal)
+
+    risk = [v for v in decision.verdicts if v.agent == "risk"][0]
+    assert proposal.target_position <= 1.0, "the cap must hold whatever Kelly says"
+
+    if proposal.evidence.get("kelly_capped"):
+        assert "capped" in risk.reason and "overfit" in risk.reason, \
+            f"a binding cap must be reported, got: {risk.reason}"
+        assert risk.detail["half_kelly_uncapped"] > 1.0
+
+
+def test_position_never_exceeds_fully_long():
+    """No path through the risk agent may produce leverage."""
+    for seed in range(5):
+        proposal = Proposal(symbol="T", strategy="ts_momentum",
+                            close=data.synthetic_regimes(seed=seed)["close"])
+        Desk().evaluate(proposal)
+        assert 0.0 <= proposal.target_position <= 1.0, \
+            f"seed {seed} produced position {proposal.target_position}"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

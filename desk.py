@@ -19,7 +19,8 @@ def main():
     source = ap.add_mutually_exclusive_group(required=True)
     source.add_argument("--csv")
     source.add_argument("--synthetic", action="store_true")
-    source.add_argument("--seed", type=int, help="synthetic series with this seed")
+
+    ap.add_argument("--seed", type=int, default=0, help="seed for --synthetic")
 
     ap.add_argument("--strategy", default="sma_cross", choices=sorted(REGISTRY))
     ap.add_argument("--symbol", default="BTCUSDT")
@@ -32,8 +33,8 @@ def main():
     if args.csv:
         close, label = data.load_csv(args.csv)["close"], args.csv
     else:
-        seed = args.seed if args.seed is not None else 0
-        close, label = data.synthetic(seed=seed)["close"], f"synthetic (seed {seed})"
+        close = data.synthetic(seed=args.seed)["close"]
+        label = f"synthetic (seed {args.seed})"
 
     desk = Desk([
         ResearchAgent(folds=args.folds),

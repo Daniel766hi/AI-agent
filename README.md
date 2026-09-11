@@ -374,6 +374,14 @@ A Sharpe of 2.89 is the number that gets people to wire money. It was refused
 because it is not distinguishable from luck, by an agent with no stake in the
 idea. The one that passed had a *lower* headline Sharpe and better evidence.
 
+Two things the desk reports that are easy to misread as good news. A half-Kelly
+above 100% is **capped**, and the verdict says so — a Kelly that large implies a
+Sharpe that out-of-sample results almost never sustain, so read it as evidence
+the edge estimate is inflated rather than as a case for leverage. And pinning
+parameters is charged one trial instead of the whole grid, which is only honest
+if you chose them before seeing the data; the code cannot check that and does
+not pretend to.
+
 The agents are deterministic and rule-based, so their reasoning is auditable
 and reproducible rather than persuasive. An LLM-backed agent could implement the
 same `Agent` contract, but nothing here needs one, and a component that costs

@@ -246,12 +246,27 @@ class RiskAgent(Agent):
                 ruin_probability=ruin)
 
         # Half Kelly, capped at fully long. Kelly assumes the edge estimate is
-        # right; it is an estimate from one sample, so bet less than it says.
-        sized = max(0.0, min(kelly["half_kelly"], 1.0))
+        # correct; it is an estimate from one sample, so bet less than it says.
+        uncapped = kelly["half_kelly"]
+        sized = max(0.0, min(uncapped, 1.0))
         proposal.target_position = sized
+        proposal.evidence["kelly_capped"] = uncapped > 1.0
+
+        note = ""
+        if uncapped > 1.0:
+            # A Kelly this size implies a Sharpe that out-of-sample results
+            # almost never sustain. Read it as a warning that the edge estimate
+            # is inflated, not as permission to lever up. The cap is doing real
+            # work here, and the report should say so rather than imply the
+            # size was chosen freely.
+            note = (f"; half Kelly wanted {uncapped:.0%} — capped at 100%, and a figure "
+                    f"that large usually means the edge estimate is overfit, not that "
+                    f"leverage is warranted")
+
         return self._ok(
-            f"size {sized:.0%} (half Kelly), {ruin:.1%} chance of a {self.ruin_drawdown:.0%} drawdown",
-            position=sized, ruin_probability=ruin)
+            f"size {sized:.0%} (half Kelly), {ruin:.1%} chance of a "
+            f"{self.ruin_drawdown:.0%} drawdown{note}",
+            position=sized, ruin_probability=ruin, half_kelly_uncapped=uncapped)
 
 
 @dataclass
