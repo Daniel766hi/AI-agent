@@ -29,6 +29,10 @@ asked:
 - **Live trading stays gated.** `--yes-real-money`, env credentials,
   `--max-notional`, passing validation, drawdown kill switch. Five gates. Do not
   quietly relax one.
+- **Exchange facts come from the exchange.** Never infer a pair's base/quote by
+  slicing the symbol, and never hardcode lot steps or minimums — read
+  `exchangeInfo`. Use `Decimal` for lot arithmetic; float division silently
+  drops a step and leaves a position that was meant to be flat.
 - **Alerting is best-effort, never load-bearing.** A dead webhook must not
   change what the trader does. The kill switch has a test asserting it still
   fires with alerting pointed at a dead port.
@@ -103,8 +107,10 @@ rationale honestly, including that a documented past effect is not a promise.
 
 ## Known limits — state these, don't paper over them
 
-- `BinanceBroker` has **never placed a real order**. Signing is verified against
-  Binance's published vector; nothing else on that path has run live.
+- `BinanceBroker` has **never placed a real order** against the real exchange.
+  It is exercised end to end against `tests/fake_binance.py`, which verifies
+  signatures and enforces lot filters — that catches our bugs, not the real
+  API's current behaviour. Use testnet before real funds.
 - CoinGecko and Yahoo fetchers are tested against captured payload shapes, never
   against the live endpoints (this sandbox blocks them).
 - No strategy in the repo has demonstrated edge. That is the expected result and

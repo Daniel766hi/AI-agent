@@ -296,12 +296,28 @@ python trade.py --strategy sma_cross --mode live \
 The validation gate is overridable with `--skip-validation`, which prints
 `You are trading noise.` and means it.
 
-**The live broker has never placed a real order.** Its request signing is
-unit-tested against Binance's published example vector, but nothing else on that
-path has run against the exchange. Point `BINANCE_API_URL` at
-`https://testnet.binance.vision` and read every fill before you trust it with
-real funds. Restrict your API key to spot trading, never enable withdrawals, and
-IP-allowlist it.
+**The live broker has still never placed a real order**, but it is no longer
+untested. `tests/fake_binance.py` is a stand-in exchange that verifies HMAC
+signatures, enforces `LOT_SIZE` and `minNotional`, and settles balances, and the
+broker is driven through full buy/sell round trips against it. That proves our
+signing, symbol handling and lot maths are self-consistent; it proves nothing
+about the real API's behaviour today.
+
+Two bugs it caught, both of which would only have shown up with money at stake:
+
+- Base and quote assets were split by string position (`symbol[:-4]`), so any
+  pair without a four-character quote parsed as nonsense — `ETHBTC` became
+  `ET`/`HBTC`. Balances then read zero, orders were skipped as dust, and the
+  kill switch never saw a drawdown. It looked healthy while doing nothing.
+  Assets and lot rules now come from `exchangeInfo`.
+- Lot rounding used float division, and `0.01663 / 0.00001` is
+  `1662.9999999999998`, so flooring dropped a whole step. An order meant to
+  flatten the position left a sliver of it behind — and flattening is exactly
+  what the drawdown kill switch does. Lot arithmetic now uses `Decimal`.
+
+Point `BINANCE_API_URL` at `https://testnet.binance.vision` and read every fill
+before trusting it with real funds. Restrict the API key to spot trading, never
+enable withdrawals, and IP-allowlist it.
 
 ## Running it unattended
 
