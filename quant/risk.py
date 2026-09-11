@@ -44,8 +44,16 @@ def risk_of_ruin(returns, ruin_drawdown=0.5, horizon_years=1.0, leverage=1.0,
     """Probability of a `ruin_drawdown` loss within the horizon.
 
     Bootstraps from the actual return distribution rather than assuming
-    normality, because real returns have fat tails and that is exactly what
-    ruin calculations get wrong.
+    normality, because real returns have fat tails and a normal model misses
+    them.
+
+    Known limitation, and it cuts the other way: a bootstrap can only resample
+    days that actually happened, so it can never generate a loss worse than the
+    worst day in the input. Feed it two years of calm and it will report calm.
+    That understates tail risk precisely where it matters — at high leverage,
+    where a single unprecedented day is what ends the account. Treat the output
+    as a floor on risk, not an estimate of it, and give it as much history as
+    you can including the crashes.
 
     Leverage multiplies returns; a levered path that touches -100% is dead and
     stays dead, which is why leverage does not scale outcomes symmetrically.

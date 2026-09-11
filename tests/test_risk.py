@@ -134,6 +134,26 @@ def test_live_cost_report_survives_missing_cost():
     assert live_cost_report(trades, equity=500.0)["total_cost"] == 2.0
 
 
+
+def test_bootstrap_cannot_exceed_its_worst_observed_day():
+    """Documents the method's ceiling: resampling invents no new extremes.
+
+    This is why the docstring calls the output a floor on risk. A calm history
+    bootstraps to a calm forecast no matter how levered the position.
+    """
+    calm = pd.Series(np.random.default_rng(0).normal(0.0005, 0.004, 1000))
+    # Even at 10x, a history whose worst day is about -1.5% cannot wipe out in a
+    # year of resampling — no draw exists that could do it.
+    assert risk_of_ruin(calm, 0.95, leverage=10, n_sims=2000) == 0.0
+
+    # Put one crash in the history and the same leverage becomes visibly unsafe.
+    shocked = calm.copy()
+    shocked.iloc[500] = -0.35
+    assert risk_of_ruin(shocked, 0.50, leverage=10, n_sims=2000) > \
+           risk_of_ruin(calm, 0.50, leverage=10, n_sims=2000), \
+        "a crash in the history must raise estimated ruin risk"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
