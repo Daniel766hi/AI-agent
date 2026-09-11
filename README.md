@@ -11,7 +11,7 @@ when that's the truth — which it usually is.
 
 ```bash
 pip install -r requirements.txt
-python tests/test_quant.py && python tests/test_strategies.py && python tests/test_trading.py
+python run_tests.py                                  # 51 self-checks
 python run.py --synthetic --strategy sma_cross      # random-walk sanity run
 ```
 
@@ -233,6 +233,21 @@ would mean a lookahead bug, not a discovery.
 better-documented cross-asset effects (Moskowitz, Ooi & Pedersen 2012), usually
 attributed to slow information diffusion. A documented past effect is still not
 a promise about your data.
+
+## Bad data is rejected, not absorbed
+
+Real feeds produce bad ticks: a zero from an API error, a gap over a trading
+halt, a negative from a bad parse. `backtest()` refuses all three at the one
+point every backtest, screen and live tick passes through.
+
+This is not pedantry. Before the check, a single zero price produced an
+**infinite** return — and an asset with an infinite return ranks first in any
+screen you run. The failure mode was to hand you a fabricated winner.
+
+Missing bars are ordinary, so `load_csv()` drops them and says how many; zero
+and negative prices are not ordinary, so they raise with the offending
+timestamp named. A screen skips the bad asset and continues, and the
+multiple-testing count drops to match the assets that actually ran.
 
 ## Paper and live trading
 

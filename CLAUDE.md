@@ -27,6 +27,10 @@ asked:
 - **Live trading stays gated.** `--yes-real-money`, env credentials,
   `--max-notional`, passing validation, drawdown kill switch. Five gates. Do not
   quietly relax one.
+- **Bad prices are rejected, never filled.** `backtest()` refuses missing, zero
+  and negative prices. Real feeds produce all three, and a single zero makes the
+  next return infinite — which would rank that asset first in any screen. Drop
+  bad bars deliberately at load time; never let them reach a result.
 
 ## Testing conventions
 
@@ -35,11 +39,13 @@ Self-checks are plain `assert` functions in `tests/test_*.py`, run with
 the end of the file** — it collects tests from `globals()`, so anything defined
 below it silently never runs. That bug has already happened once.
 
-Run all three before committing:
+Run everything before committing:
 
 ```bash
-python tests/test_quant.py && python tests/test_strategies.py && python tests/test_trading.py
+python run_tests.py
 ```
+
+It exits non-zero when any file fails, so it is safe to gate on.
 
 **Synthetic data is the null hypothesis, and it is load-bearing.**
 `data.synthetic()` is a random walk; `data.synthetic_garch()` adds volatility

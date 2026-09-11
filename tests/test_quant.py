@@ -95,6 +95,80 @@ def test_short_series_rejected():
     raise AssertionError("should reject a series too short to split")
 
 
+
+def test_rejects_zero_price():
+    """A zero price makes the next return infinite — it would top any screen."""
+    close = data.synthetic(n=300, seed=10)["close"].copy()
+    close.iloc[100] = 0.0
+    try:
+        backtest(close, pd.Series(1.0, index=close.index))
+    except ValueError as exc:
+        assert "non-positive" in str(exc)
+        return
+    raise AssertionError("a zero price must be rejected, not modelled")
+
+
+def test_rejects_negative_and_missing_prices():
+    base = data.synthetic(n=300, seed=11)["close"]
+    for label, value in [("negative", -5.0), ("missing", float("nan"))]:
+        close = base.copy()
+        close.iloc[100] = value
+        try:
+            backtest(close, pd.Series(1.0, index=close.index))
+        except ValueError:
+            continue
+        raise AssertionError(f"a {label} price must be rejected")
+
+
+def test_rejects_empty_series():
+    try:
+        backtest(pd.Series([], dtype=float), pd.Series([], dtype=float))
+    except ValueError:
+        return
+    raise AssertionError("an empty series must be rejected")
+
+
+def test_bad_price_error_names_the_location():
+    """The message has to be actionable — which bar, and what was wrong with it."""
+    close = data.synthetic(n=200, seed=12)["close"].copy()
+    close.iloc[57] = 0.0
+    try:
+        backtest(close, pd.Series(1.0, index=close.index))
+    except ValueError as exc:
+        assert str(close.index[57]) in str(exc), f"error must name the bad bar: {exc}"
+        return
+    raise AssertionError("expected rejection")
+
+
+def test_load_csv_drops_missing_closes():
+    """Holidays and halts leave blank closes; those are ordinary and droppable."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "gappy.csv"
+        df = data.synthetic(n=100, seed=13).reset_index(names="date")
+        df.loc[[10, 20, 30], "close"] = None
+        df.to_csv(path, index=False)
+
+        loaded = data.load_csv(path)
+        assert len(loaded) == 97, f"expected 3 rows dropped, got {len(loaded)}"
+        assert loaded["close"].notna().all()
+        # and the cleaned series must now pass the backtest guard
+        backtest(loaded["close"], pd.Series(1.0, index=loaded.index))
+
+
+def test_positive_period_rate_is_not_a_trade_win_rate():
+    """It counts exposed periods, not trades. The name must not overclaim."""
+    close = data.synthetic(n=600, seed=14)["close"]
+    result = backtest(close, REGISTRY["sma_cross"][0](close, 10, 50))
+    m = metrics(result["net_return"])
+
+    assert "hit_rate" not in m, "the misleading name must be gone"
+    assert 0.0 <= m["positive_period_rate"] <= 1.0
+    n_trades = int((result["turnover"] > 0).sum())
+    n_exposed = int((result["net_return"] != 0).sum())
+    assert n_exposed > n_trades, "periods and trades differ — that is why it was renamed"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

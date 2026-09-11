@@ -25,7 +25,17 @@ def load_csv(path):
         raise ValueError(f"{path}: no 'close' column found in {list(df.columns)}")
     df[date_col] = pd.to_datetime(df[date_col], errors="coerce", format="mixed")
     df = df.dropna(subset=[date_col]).set_index(date_col).sort_index()
-    return df[~df.index.duplicated(keep="first")]
+    df = df[~df.index.duplicated(keep="first")]
+
+    # Missing bars are ordinary (holidays, halts, thin weekends) — drop them.
+    # Zero and negative prices are not ordinary; they mean the feed is wrong, and
+    # backtest() refuses them rather than letting one bad tick reach a result.
+    missing = int(df["close"].isna().sum())
+    if missing:
+        df = df[df["close"].notna()]
+    if df.empty:
+        raise ValueError(f"{path}: no usable rows after dropping {missing} missing close(s)")
+    return df
 
 
 def fetch_binance(symbol="BTCUSDT", interval="1d", start="2019-01-01", cache_dir="data"):

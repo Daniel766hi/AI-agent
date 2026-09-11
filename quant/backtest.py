@@ -8,6 +8,35 @@ DEFAULT_FEE_BPS = 10.0
 DEFAULT_SLIPPAGE_BPS = 5.0
 
 
+def _reject_bad_prices(close):
+    """Refuse to model prices that cannot be real.
+
+    Every backtest, screen and live tick routes through backtest(), so this is
+    the one place the check has to live. Real feeds do produce these: a zero
+    from an API error, a gap over a halt, a negative from a bad parse. Filling
+    them silently is worse than failing — a single zero makes the next return
+    infinite, which would top the ranking in any screen.
+    """
+    if len(close) == 0:
+        raise ValueError("no price data")
+
+    n_missing = int(close.isna().sum())
+    if n_missing:
+        first = close.index[close.isna()][0]
+        raise ValueError(
+            f"{n_missing} missing price(s), first at {first}. Drop or fill them "
+            "deliberately before backtesting — they cannot be modelled as zero returns."
+        )
+
+    bad = close <= 0
+    if bad.any():
+        first = close.index[bad][0]
+        raise ValueError(
+            f"{int(bad.sum())} non-positive price(s), first at {first} ({close[bad].iloc[0]}). "
+            "A zero or negative price makes the next return infinite or nonsensical."
+        )
+
+
 def backtest(close, signal, fee_bps=DEFAULT_FEE_BPS, slippage_bps=DEFAULT_SLIPPAGE_BPS,
              periods_per_year=365):
     """Run `signal` against `close` and return a DataFrame of the run.
@@ -18,6 +47,7 @@ def backtest(close, signal, fee_bps=DEFAULT_FEE_BPS, slippage_bps=DEFAULT_SLIPPA
     shift is what separates a backtest from a fantasy.
     """
     close = pd.Series(close).astype(float)
+    _reject_bad_prices(close)
     signal = pd.Series(signal, index=close.index).astype(float).fillna(0.0)
 
     position = signal.shift(1).fillna(0.0)          # <- the no-lookahead guard
@@ -45,7 +75,8 @@ def metrics(net_return, periods_per_year=365):
     n = len(r)
     if n == 0:
         return {k: float("nan") for k in
-                ("cagr", "sharpe", "max_drawdown", "volatility", "total_return", "n_periods", "hit_rate")}
+                ("cagr", "sharpe", "max_drawdown", "volatility", "total_return",
+                 "n_periods", "positive_period_rate")}
 
     equity = (1.0 + r).cumprod()
     total = equity.iloc[-1] - 1.0
@@ -57,7 +88,9 @@ def metrics(net_return, periods_per_year=365):
     sd = r.std(ddof=1)
     sharpe = (r.mean() / sd) * np.sqrt(periods_per_year) if sd > 0 else 0.0
     drawdown = (equity / equity.cummax() - 1.0).min()
-    traded = r[r != 0]
+    # Periods with a nonzero result — NOT a per-trade win rate. One trade spans
+    # many periods, so this is "how often did an exposed day gain", nothing more.
+    exposed = r[r != 0]
 
     return {
         "cagr": float(cagr),
@@ -66,7 +99,7 @@ def metrics(net_return, periods_per_year=365):
         "volatility": float(sd * np.sqrt(periods_per_year)),
         "total_return": float(total),
         "n_periods": int(n),
-        "hit_rate": float((traded > 0).mean()) if len(traded) else float("nan"),
+        "positive_period_rate": float((exposed > 0).mean()) if len(exposed) else float("nan"),
     }
 
 

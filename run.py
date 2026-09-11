@@ -66,7 +66,7 @@ def main():
     for key, label_, fmt in [
         ("cagr", "CAGR", "{:.1%}"), ("sharpe", "Sharpe", "{:.2f}"),
         ("max_drawdown", "Max drawdown", "{:.1%}"), ("volatility", "Volatility", "{:.1%}"),
-        ("total_return", "Total return", "{:.1%}"), ("hit_rate", "Hit rate", "{:.1%}"),
+        ("total_return", "Total return", "{:.1%}"), ("positive_period_rate", "Up periods", "{:.1%}"),
     ]:
         print(f"{label_:<18}{fmt.format(strat[key]):>18}{fmt.format(hold[key]):>18}")
 
