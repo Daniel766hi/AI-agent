@@ -12,7 +12,9 @@ import os
 import sys
 
 from quant import data
-from quant.live import Trader, make_broker
+from pathlib import Path
+
+from quant.live import STATE_FILE, Trader, make_broker
 from quant.strategies import REGISTRY
 from quant.validate import block_bootstrap_pvalue, deflate, walk_forward
 
@@ -43,6 +45,8 @@ def main():
     ap.add_argument("--validate-csv", help="CSV to validate against before going live")
     ap.add_argument("--yes-real-money", action="store_true", help="required to place live orders")
     ap.add_argument("--skip-validation", action="store_true", help="go live on an unvalidated strategy")
+    ap.add_argument("--reset", action="store_true",
+                    help="clear a saved halt and drawdown peak before starting")
     args = ap.parse_args()
 
     params = {}
@@ -72,6 +76,13 @@ def main():
                 )
             params = params or fitted
             print(f"Using walk-forward fitted params: {params}\n")
+
+    if args.reset:
+        # A halt is a safety stop; clearing it is deliberate and announced.
+        removed = [p for p in (STATE_FILE, Path("data/paper_broker.json")) if p.exists()]
+        for path in removed:
+            path.unlink()
+        print(f"Reset: cleared {', '.join(str(p) for p in removed) or 'nothing (no saved state)'}\n")
 
     broker = make_broker(args.mode, args.symbol, args.cash, args.max_notional)
     trader = Trader(args.strategy, params, broker, args.symbol, args.interval,

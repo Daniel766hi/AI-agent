@@ -29,6 +29,12 @@ asked:
 - **Live trading stays gated.** `--yes-real-money`, env credentials,
   `--max-notional`, passing validation, drawdown kill switch. Five gates. Do not
   quietly relax one.
+- **A halt outlives its process.** The drawdown halt and peak persist to the
+  state file and reload on start. Never let a restart reset them — that hands a
+  just-stopped strategy a fresh allowance to lose. Only `--reset` clears it.
+- **State writes are atomic.** The dashboard polls the state file while the
+  trader rewrites it, so write to a temp file and rename. And never report an
+  unreadable state as "not running" — unknown is not the same as flat.
 - **Bad prices are rejected, never filled.** `backtest()` refuses missing, zero
   and negative prices. Real feeds produce all three, and a single zero makes the
   next return infinite — which would rank that asset first in any screen. Drop

@@ -95,6 +95,11 @@ def api_state():
     state = read_state()
     if state is None:
         return jsonify({"running": False, "message": "No trader has run yet. Start trade.py."})
+    if state.get("unreadable"):
+        # Never render this as "no position" — that reads as flat when it is unknown.
+        return jsonify({"running": False, "unreadable": True,
+                        "message": f"Cannot read {state['state_file']}. The file exists but is "
+                                   "corrupt — check the trader process before assuming you are flat."}), 503
     stale = (time.time() - Path("data/live_state.json").stat().st_mtime) > 7200
     return jsonify({"running": True, "stale": stale, **state})
 
@@ -104,7 +109,7 @@ def api_state():
 def api_costs():
     """What this run is paying to trade, versus what it would pay trading less."""
     state = read_state()
-    if state is None:
+    if state is None or state.get("unreadable"):
         return jsonify({"running": False})
 
     report = live_cost_report(state.get("trades", []), state.get("equity") or 0.0)

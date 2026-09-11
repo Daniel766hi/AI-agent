@@ -275,6 +275,18 @@ Live mode places real orders on Binance spot and has to get past five gates:
 | Walk-forward validation passes | Refuses to trade a strategy with no measured edge |
 | `--max-drawdown` kill switch | Flattens and halts; does not average down |
 
+The halt persists. A trader that stopped at -15% reloads that halt and its
+drawdown peak on restart, so restarting does not hand it a fresh -15% of room
+to lose. Clearing it is a deliberate act — `trade.py --reset` — and it prints
+what it cleared.
+
+State is written atomically (temp file, then rename), because the dashboard
+polls the same file while the trader rewrites it. A plain write is truncated
+mid-rewrite, and a reader landing there sees invalid JSON. That mattered: the
+dashboard reported "no trader has run yet" while a position was open. If the
+file is ever genuinely corrupt the dashboard says so and returns 503, rather
+than rendering an unknown position as flat.
+
 ```bash
 export BINANCE_API_KEY=... BINANCE_API_SECRET=...
 python trade.py --strategy sma_cross --mode live \

@@ -53,6 +53,25 @@ class Trader:
         self.halted = False
         self.halt_reason = None
         self.last_error = None
+        self._restore()
+
+    def _restore(self):
+        """Reload the drawdown peak and any halt from the last run.
+
+        Without this a restart resets the peak to current equity, so a trader
+        that just halted at -20% resumes with a fresh -20% of room. A halt is a
+        safety stop and must survive the process that set it; clearing it is a
+        deliberate act (trade.py --reset), never a side effect of restarting.
+        """
+        prior = read_state(self.state_file)
+        if not prior or prior.get("symbol") != self.symbol:
+            return
+        self.peak_equity = prior.get("peak_equity")
+        self.halted = bool(prior.get("halted"))
+        self.halt_reason = prior.get("halt_reason")
+        if self.halted:
+            print(f"  resuming HALTED: {self.halt_reason}")
+            print("  clear it deliberately with --reset once you have understood why.")
 
     def tick(self):
         """One cycle: read the market, compute the target, move the position."""
@@ -120,8 +139,17 @@ class Trader:
                 time.sleep(poll_seconds)
 
     def _write(self, state):
+        """Write atomically: the dashboard polls this file while we rewrite it.
+
+        A plain write leaves the file truncated mid-rewrite, and a reader landing
+        there sees invalid JSON and concludes no trader is running — while a
+        position is open. Writing a temp file and renaming makes the swap atomic,
+        so a reader sees either the old state or the new one, never half of one.
+        """
         self.state_file.parent.mkdir(parents=True, exist_ok=True)
-        self.state_file.write_text(json.dumps(state, indent=2, default=str))
+        tmp = self.state_file.with_suffix(self.state_file.suffix + ".tmp")
+        tmp.write_text(json.dumps(state, indent=2, default=str))
+        os.replace(tmp, self.state_file)
 
 
 def make_broker(mode, symbol, starting_cash=1000.0, max_notional=None):
@@ -146,7 +174,13 @@ def read_state(state_file=STATE_FILE):
     path = Path(state_file)
     if not path.exists():
         return None
-    try:
-        return json.loads(path.read_text())
-    except json.JSONDecodeError:
-        return None
+    # Writes are atomic, so a decode failure means a genuinely corrupt file
+    # rather than a torn read. Retry once regardless, then report it as an
+    # error — never as "no trader is running", which reads as "you are flat".
+    for attempt in (0, 1):
+        try:
+            return json.loads(path.read_text())
+        except (json.JSONDecodeError, FileNotFoundError):
+            if attempt == 0:
+                time.sleep(0.05)
+    return {"unreadable": True, "state_file": str(path)}

@@ -229,6 +229,106 @@ def test_dashboard_respects_reduced_motion():
     assert ":focus-visible" in html, "keyboard focus must stay visible"
 
 
+
+# --- live loop safety -------------------------------------------------------
+
+def _halted_trader(tmp, max_dd=15.0):
+    """Drive a trader into its drawdown halt on a falling series."""
+    from unittest.mock import patch
+    from quant import data
+    from quant.broker import PaperBroker
+    from quant.live import Trader
+
+    bars = data.synthetic(n=400, annual_drift=-0.9, seed=3)["close"]
+    state = Path(tmp) / "state.json"
+    broker = PaperBroker(starting_cash=1000.0, state_path=Path(tmp) / "broker.json")
+    trader = Trader("sma_cross", {"fast": 5, "slow": 20}, broker, "X",
+                    max_drawdown_pct=max_dd, state_file=state)
+    last = None
+    for i in range(60, 200, 5):
+        with patch("quant.live.recent_bars", return_value=bars.iloc[:i]):
+            last = trader.tick()
+    return state, last, bars
+
+
+def test_halt_survives_restart():
+    """A restart must not hand a halted strategy a fresh drawdown allowance."""
+    from unittest.mock import patch
+    from quant.broker import PaperBroker
+    from quant.live import Trader
+
+    with tempfile.TemporaryDirectory() as tmp:
+        state, before, bars = _halted_trader(tmp)
+        assert before["halted"], "setup failed: trader should have halted"
+
+        broker = PaperBroker(starting_cash=1000.0, state_path=Path(tmp) / "broker.json")
+        restarted = Trader("sma_cross", {"fast": 5, "slow": 20}, broker, "X",
+                           max_drawdown_pct=15.0, state_file=state)
+        assert restarted.halted, "halt must persist across a restart"
+        assert restarted.peak_equity == before["peak_equity"], "drawdown peak must persist"
+
+        with patch("quant.live.recent_bars", return_value=bars.iloc[:200]):
+            after = restarted.tick()
+        assert after["halted"] and after["target_position"] == 0.0, "must stay flat while halted"
+
+
+def test_halt_not_restored_for_a_different_symbol():
+    """State from another symbol must not silently halt an unrelated run."""
+    from quant.broker import PaperBroker
+    from quant.live import Trader
+
+    with tempfile.TemporaryDirectory() as tmp:
+        state, before, _ = _halted_trader(tmp)
+        assert before["halted"]
+        other = Trader("sma_cross", {"fast": 5, "slow": 20},
+                       PaperBroker(starting_cash=1000.0), "DIFFERENT",
+                       max_drawdown_pct=15.0, state_file=state)
+        assert not other.halted, "a halt on one symbol must not carry to another"
+
+
+def test_state_writes_are_atomic():
+    """The dashboard polls this file while the trader rewrites it."""
+    import json
+    import threading
+    from quant.live import Trader, read_state
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "race.json"
+        payload = {"blob": "x" * 200_000, "n": 0}
+        path.write_text(json.dumps(payload))
+
+        writer_self = Trader.__new__(Trader)
+        writer_self.state_file = path
+        failures = []
+
+        def write():
+            for i in range(200):
+                payload["n"] = i
+                Trader._write(writer_self, payload)
+
+        def read():
+            for _ in range(200):
+                out = read_state(path)
+                if out is None or out.get("unreadable"):
+                    failures.append(1)
+
+        w, r = threading.Thread(target=write), threading.Thread(target=read)
+        w.start(); r.start(); w.join(); r.join()
+        assert not failures, f"{len(failures)} torn reads — writes are not atomic"
+
+
+def test_unreadable_state_is_not_reported_as_flat():
+    """A corrupt file must surface as an error, never as 'no position'."""
+    from quant.live import read_state
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "corrupt.json"
+        path.write_text("{ this is not json")
+        out = read_state(path)
+        assert out is not None, "a corrupt file must not look like 'no trader running'"
+        assert out.get("unreadable") is True
+        assert read_state(Path(tmp) / "absent.json") is None, "a missing file is genuinely 'not started'"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
