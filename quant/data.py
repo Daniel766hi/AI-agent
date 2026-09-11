@@ -212,3 +212,31 @@ def synthetic_garch(n=2000, annual_drift=0.0, base_annual_vol=0.6, alpha=0.10, b
     close = start_price * np.exp(np.cumsum(drift + shocks))
     idx = pd.date_range("2015-01-01", periods=n, freq="D")
     return pd.DataFrame({"close": close}, index=idx)
+
+
+def synthetic_regimes(n=2500, seed=0, mean_length=120, bull_drift=1.4, bear_drift=-1.1,
+                      annual_vol=0.40, start_price=100.0):
+    """Alternating bull and bear regimes — a series where timing genuinely pays.
+
+    The other two generators contain no exploitable structure by construction,
+    which makes them the right null but useless for checking that the machinery
+    can still find something real. Here the drift switches sign and persists, so
+    a trend follower can add value by sitting out the downtrends, and holding
+    cannot.
+
+    Use it to confirm the pipeline is not merely a rejection machine. It is not
+    a model of any real market: real regimes are not this clean, and knowing
+    they exist is not the same as being able to time them.
+    """
+    rng = np.random.default_rng(seed)
+    dt = 1.0 / 365
+    returns, regime = [], 0
+    while len(returns) < n:
+        length = max(30, int(rng.exponential(mean_length)))
+        drift = bull_drift if regime % 2 == 0 else bear_drift
+        returns.extend(drift * dt + rng.normal(0, annual_vol * np.sqrt(dt), length))
+        regime += 1
+
+    close = start_price * np.exp(np.cumsum(returns[:n]))
+    return pd.DataFrame({"close": close},
+                        index=pd.date_range("2015-01-01", periods=n, freq="D"))

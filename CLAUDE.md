@@ -28,6 +28,10 @@ asked:
   `tests/test_validate.py`, which asserts the false-positive rate under the
   null. A test that finds edges in noise makes every verdict in the repo
   worthless.
+- **On the desk, a veto is final.** `Desk` requires unanimous approval and has
+  no scoring or weighting. Never add a majority vote, a confidence weight, or an
+  override — the whole point is that optimism cannot outvote risk. An agent that
+  raises has not approved.
 - **Deflation for search.** Any p-value must be charged for every configuration
   tried — and in a screen, for every asset too (`assets x configs`). A raw
   p-value next to a searched grid is a lie.

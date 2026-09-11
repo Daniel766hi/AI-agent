@@ -337,6 +337,53 @@ Point `BINANCE_API_URL` at `https://testnet.binance.vision` and read every fill
 before trusting it with real funds. Restrict the API key to spot trading, never
 enable withdrawals, and IP-allowlist it.
 
+## The desk: one idea, four mandates, any veto final
+
+```bash
+python desk.py --synthetic --strategy breakout
+python desk.py --csv data/BTCUSDT_1d.csv --strategy ts_momentum --equity 5000
+```
+
+The way a trading system fails is self-deception: the same process that wants
+the trade also judges whether the trade is sound. Real desks separate those
+roles, and a risk officer who can only advise is not a risk officer. So the
+decision is split across agents with narrow mandates:
+
+| Agent | Mandate | Can it approve? |
+|---|---|---|
+| `research` | Fit parameters out-of-sample, show the working | Reports evidence; **cannot approve its own work** |
+| `skeptic` | Assume noise until the evidence survives the search that found it | Veto |
+| `cost` | Confirm the edge exceeds what it costs to capture | Veto |
+| `risk` | Ensure a bad run cannot end the account | Veto, and sets position size |
+
+**Approval is unanimous and a veto is final.** No score, no weighting, no
+majority — a structure where two optimistic agents can outvote the risk agent is
+how accounts die. An agent that crashes has not approved anything.
+
+Run across six regime-switching series with genuine structure, the desk approved
+one. The rejections are the interesting part:
+
+```
+seed 1  research: OOS Sharpe 2.89 vs 2.39 holding    ->  VETO skeptic: p=0.635
+seed 5  research: OOS Sharpe 2.13 vs 1.53 holding    ->  VETO skeptic: p=0.563
+seed 3  research: OOS Sharpe 1.30 vs 1.35 holding    ->  VETO cost: returns 43% vs 59% holding
+seed 2  research: OOS Sharpe 0.78 vs -1.28 holding   ->  APPROVED, p=0.000
+```
+
+A Sharpe of 2.89 is the number that gets people to wire money. It was refused
+because it is not distinguishable from luck, by an agent with no stake in the
+idea. The one that passed had a *lower* headline Sharpe and better evidence.
+
+The agents are deterministic and rule-based, so their reasoning is auditable
+and reproducible rather than persuasive. An LLM-backed agent could implement the
+same `Agent` contract, but nothing here needs one, and a component that costs
+money per call and answers differently each time does not belong on a veto path.
+
+`data.synthetic_regimes()` generates the alternating bull/bear series used
+above — the one generator here that *does* contain exploitable structure,
+so the pipeline can be checked for being a rejection machine rather than a
+filter.
+
 ## Running it unattended
 
 ```bash
