@@ -16,6 +16,7 @@ import time
 from functools import wraps
 from pathlib import Path
 
+import pandas as pd
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -39,6 +40,34 @@ app.config.update(
 )
 
 TOKEN = os.environ.get("DASHBOARD_TOKEN") or secrets.token_urlsafe(32)
+
+
+@app.after_request
+def _harden(response):
+    """Defence in depth. Cheap, and this app can be bound beyond localhost.
+
+    SameSite=Lax already keeps the session cookie out of cross-site frames, so
+    these are a second layer rather than the only one — but the page shows
+    positions and can place orders, and a header costs nothing.
+    """
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        # Fonts are the only third party. Everything else is same-origin, and
+        # nothing may frame this page or post form data elsewhere.
+        "default-src 'self'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src https://fonts.gstatic.com; "
+        "script-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'; "
+        "form-action 'self'; "
+        "base-uri 'none'"
+    )
+    return response
 
 
 def require_auth(view):
@@ -141,7 +170,15 @@ def api_backtest():
             # Path containment check: the browser must not read arbitrary files.
             if not safe.is_relative_to(Path.cwd()) or not safe.exists():
                 return jsonify({"error": "csv must be an existing file under the project directory"}), 400
-            close, label = data.load_csv(safe)["close"], safe.name
+            try:
+                close, label = data.load_csv(safe)["close"], safe.name
+            except ValueError as exc:
+                # load_csv names the absolute path and quotes the columns it
+                # found, which reflects file contents and deployment layout back
+                # to the caller. Log that; return only what the user can act on.
+                app.logger.warning("rejected %s: %s", safe, exc)
+                return jsonify({"error": f"{safe.name} is not usable OHLCV data — "
+                                         "it needs a date column and a close column."}), 400
         else:
             seed = int(request.args.get("seed", 0))
             close, label = data.synthetic(seed=seed)["close"], f"synthetic (seed {seed})"
@@ -170,8 +207,20 @@ def api_backtest():
             "equity_curve": [round(v, 4) for v in equity.tolist()],
             "benchmark_curve": [round(v, 4) for v in (1 + benchmark).cumprod().tolist()],
         })
+    except (pd.errors.ParserError, UnicodeDecodeError):
+        # ParserError subclasses ValueError, so it must be caught first or the
+        # handler below returns pandas' internals to the browser verbatim.
+        app.logger.warning("unparseable CSV: %s", csv_path)
+        return jsonify({"error": "Could not parse that file as CSV. It needs a "
+                                 "date column and a close column."}), 400
     except (ValueError, FileNotFoundError) as exc:
         return jsonify({"error": str(exc)}), 400
+    except Exception:
+        # A malformed CSV raises parser internals that mean nothing to a reader
+        # and describe our stack to anyone who reaches this endpoint.
+        app.logger.exception("backtest failed for %s", csv_path or "synthetic")
+        return jsonify({"error": "Could not read that file as OHLCV data. "
+                                 "It needs a date column and a close column."}), 400
 
 
 def main():
@@ -181,9 +230,15 @@ def main():
     args = ap.parse_args()
 
     if args.host not in ("127.0.0.1", "localhost"):
+        # Off loopback the token crosses a network. Mark the cookie Secure so a
+        # browser refuses to send it over plain HTTP at all — better a session
+        # that will not work than one that leaks in transit.
+        app.config["SESSION_COOKIE_SECURE"] = True
         print("\n  !! Binding beyond localhost. Anyone who can reach this host and")
         print("     guess the token can see your positions. Use a tunnel or VPN,")
-        print("     not a public bind, and never without HTTPS.\n")
+        print("     not a public bind, and never without HTTPS.")
+        print("     The session cookie is now marked Secure, so sign-in will fail")
+        print("     over plain HTTP by design.\n")
 
     print(f"\n  Dashboard   http://{args.host}:{args.port}")
     if not os.environ.get("DASHBOARD_TOKEN"):

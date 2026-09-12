@@ -329,6 +329,78 @@ def test_unreadable_state_is_not_reported_as_flat():
         assert read_state(Path(tmp) / "absent.json") is None, "a missing file is genuinely 'not started'"
 
 
+
+# --- dashboard hardening ----------------------------------------------------
+
+def _client(token="test-token-value"):
+    os.environ["DASHBOARD_TOKEN"] = token
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "web"))
+    import importlib
+    import logging
+    import app as dashboard
+    importlib.reload(dashboard)
+    dashboard.app.logger.setLevel(logging.CRITICAL)     # keep expected warnings quiet
+    client = dashboard.app.test_client()
+    client.post("/login", data={"token": token})
+    return client, dashboard
+
+
+def test_security_headers_are_present():
+    """The page shows positions and can be bound beyond localhost."""
+    client, _ = _client()
+    headers = client.get("/").headers
+    assert headers.get("X-Frame-Options") == "DENY"
+    assert headers.get("X-Content-Type-Options") == "nosniff"
+    assert headers.get("Referrer-Policy") == "no-referrer"
+
+    csp = headers.get("Content-Security-Policy", "")
+    assert "frame-ancestors 'none'" in csp, "must not be frameable"
+    assert "form-action 'self'" in csp, "the token form must not post elsewhere"
+
+
+def test_session_cookie_is_restrictive():
+    client, _ = _client()
+    cookie = client.post("/login", data={"token": "test-token-value"}).headers.get("Set-Cookie", "")
+    assert "HttpOnly" in cookie, "script must not be able to read the session"
+    assert "SameSite=Lax" in cookie or "SameSite=Strict" in cookie
+
+
+def test_errors_do_not_reflect_paths_or_file_contents():
+    """An error must say what to fix, not describe the filesystem."""
+    client, _ = _client()
+    for probe in ("CLAUDE.md", "requirements.txt", "/etc/passwd", "nope.csv",
+                  "../../../etc/passwd", "..%2f..%2fetc%2fpasswd"):
+        body = client.get(f"/api/backtest?strategy=sma_cross&csv={probe}").get_json() or {}
+        error = str(body.get("error", ""))
+        assert "/home/" not in error and "/etc/" not in error, \
+            f"{probe} leaked a path: {error}"
+        assert "Error tokenizing" not in error and "Traceback" not in error, \
+            f"{probe} leaked parser internals: {error}"
+
+
+def test_valid_csv_still_loads():
+    """Hardening must not break the feature it protects."""
+    import tempfile
+    from quant import data as qdata
+    client, _ = _client()
+    tmp = Path("data") / "_hardening_probe.csv"
+    tmp.parent.mkdir(exist_ok=True)
+    try:
+        qdata.synthetic(n=1200, seed=3).reset_index(names="date").to_csv(tmp, index=False)
+        body = client.get(f"/api/backtest?strategy=sma_cross&csv={tmp}").get_json() or {}
+        assert "error" not in body, f"a valid CSV was rejected: {body.get('error')}"
+        assert "p_deflated" in body
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def test_binding_off_loopback_marks_the_cookie_secure():
+    """Off localhost the token crosses a network; the cookie must refuse plain HTTP."""
+    src = (Path(__file__).resolve().parent.parent / "web" / "app.py").read_text()
+    assert 'SESSION_COOKIE_SECURE"] = True' in src, \
+        "binding beyond localhost must set the Secure flag"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

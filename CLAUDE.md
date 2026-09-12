@@ -54,6 +54,11 @@ asked:
 - **State writes are atomic.** The dashboard polls the state file while the
   trader rewrites it, so write to a temp file and rename. And never report an
   unreadable state as "not running" — unknown is not the same as flat.
+- **The dashboard says what to fix, never what it found.** An API error must
+  not carry an absolute path, a file's contents, or a library's internals —
+  log those and return a message the user can act on. `pandas.errors.ParserError`
+  subclasses `ValueError`, so catch it first or its text goes straight to the
+  browser.
 - **Bad prices are rejected, never filled.** `backtest()` refuses missing, zero
   and negative prices. Real feeds produce all three, and a single zero makes the
   next return infinite — which would rank that asset first in any screen. Drop

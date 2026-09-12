@@ -462,6 +462,19 @@ not a production server.
 Set `DASHBOARD_SECRET` as well as `DASHBOARD_TOKEN` if you want sessions to
 survive a restart.
 
+Probed rather than assumed: every API route returns 401 unauthenticated, the
+token never appears in a response, and path traversal is refused including the
+URL-encoded and `data/../../` forms. Responses carry `X-Frame-Options`,
+`X-Content-Type-Options`, `Referrer-Policy` and a CSP with `frame-ancestors
+'none'` and `form-action 'self'`; the session cookie is `HttpOnly` and
+`SameSite=Lax`, and gains `Secure` automatically when bound off loopback — so
+sign-in fails over plain HTTP by design rather than leaking the token in
+transit.
+
+Errors say what to fix and nothing else. They previously echoed the absolute
+path and the file's first line back to the caller, which reflects deployment
+layout to whoever reaches the endpoint.
+
 ## Deliberately not built
 
 Multi-user accounts, a hosted deployment, and order types beyond market orders.
