@@ -9,11 +9,38 @@ when that's the truth — which it usually is.
 
 ## Quick start
 
+Needs Python 3.11 or newer. The whole path below was verified from a clean
+clone into an empty virtualenv.
+
 ```bash
+git clone https://github.com/Daniel766hi/AI-agent.git
+cd AI-agent
+
+python3 -m venv .venv
+source .venv/bin/activate            # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-python run_tests.py                                  # every self-check
-python run.py --synthetic --strategy sma_cross      # random-walk sanity run
+
+python run_tests.py                  # every self-check; non-zero if any fail
 ```
+
+If the suite passes, the install is sound. Then try each entry point — all four
+work on synthetic data, so none of them need a network or an API key:
+
+```bash
+python run.py     --synthetic --strategy sma_cross    # walk-forward one strategy
+python desk.py    --synthetic --strategy breakout     # put it to the agent desk
+python analyze.py --synthetic --strategy sma_cross    # what profit would require
+python screen.py  --synthetic 40 --strategy breakout  # many assets, deflated
+```
+
+And the dashboard, which prints an access token on startup:
+
+```bash
+python web/app.py                    # then open http://127.0.0.1:5000
+```
+
+Expect every one of them to report **no significant edge**. That is the
+system working, not failing.
 
 Then with real data:
 
