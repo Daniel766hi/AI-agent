@@ -49,9 +49,37 @@ python run.py --fetch BTCUSDT --strategy breakout   # Binance public API, no key
 python run.py --csv data/your_data.csv --strategy sma_cross --periods-per-year 252
 ```
 
-`--fetch` needs open network access — it won't run inside a Claude Code web
-sandbox, whose policy blocks exchange hosts. Run it locally; it caches to
-`data/` and the CSV path works anywhere.
+## Getting real data working
+
+Run this first on a machine with open network access:
+
+```bash
+python datacheck.py            # which sources answer, and what is wrong with the rest
+python datacheck.py --save     # also write each to data/ and backtest the longest
+```
+
+It probes Binance, CoinGecko, and Yahoo for crypto, IDX and US tickers, then
+says per source whether it worked, was rate limited, needed a key, or could not
+be reached — with the fix for each. Expect it to fail everywhere inside a Claude
+Code web sandbox: the network policy denies all three hosts at CONNECT, and the
+report will say exactly that.
+
+**API keys.** Binance and Yahoo need none for price history. CoinGecko works
+without one but rate limits hard enough that a 30-coin screen will trip it:
+
+```bash
+export COINGECKO_API_KEY=...        # demo key
+export COINGECKO_PLAN=pro           # only if the key is a Pro key
+```
+
+Every fetcher retries a 429 or a 5xx with exponential backoff, honouring
+`Retry-After`, and never retries a 404 — that is a wrong symbol, not a busy
+server. A persistent rate limit says so and suggests a key rather than failing
+with a stack trace.
+
+None of this has been run against the live APIs; this sandbox blocks them.
+`datacheck.py` exists because that verification has to happen on your machine,
+and it is written to tell you precisely what it finds.
 
 ## What keeps it honest
 

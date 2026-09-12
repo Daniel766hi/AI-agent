@@ -120,6 +120,7 @@ correct the claim.
 | `screen.py` | Screen many assets, deflating for every trial |
 | `analyze.py` | What profit requires and what prevents it |
 | `desk.py` | Put a proposal to the agent desk |
+| `datacheck.py` | Which market data sources work from this machine |
 | `trade.py` | Paper or live trading |
 | `run_tests.py` | Runs every self-check, non-zero on failure |
 | `web/app.py` | Token-auth dashboard, localhost-bound |

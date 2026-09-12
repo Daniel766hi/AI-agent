@@ -11,9 +11,9 @@ import traceback
 from pathlib import Path
 
 import pandas as pd
-import requests
 
 from .backtest import DEFAULT_FEE_BPS, DEFAULT_SLIPPAGE_BPS
+from .data import _get
 from .broker import BinanceBroker, InsufficientFunds, PaperBroker
 from .notify import Notifier
 from .strategies import REGISTRY
@@ -24,9 +24,11 @@ KLINES = "https://api.binance.com/api/v3/klines"
 
 def recent_bars(symbol="BTCUSDT", interval="1d", limit=500):
     """Latest closed bars. The in-progress bar is dropped — it can still change."""
-    response = requests.get(
-        KLINES, params={"symbol": symbol, "interval": interval, "limit": limit}, timeout=30)
-    response.raise_for_status()
+    # Through the retrying getter: a rate limit or a 502 on one tick should
+    # cost a few seconds, not the tick. A hard failure still raises and the
+    # loop's error handling takes over.
+    response = _get(KLINES, params={"symbol": symbol, "interval": interval, "limit": limit},
+                    what=f"Binance klines ({symbol})")
     rows = response.json()
     if len(rows) < 2:
         raise RuntimeError(f"Binance returned {len(rows)} bars for {symbol}")

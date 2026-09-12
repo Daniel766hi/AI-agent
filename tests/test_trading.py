@@ -401,6 +401,143 @@ def test_binding_off_loopback_marks_the_cookie_secure():
         "binding beyond localhost must set the Secure flag"
 
 
+
+# --- data source resilience -------------------------------------------------
+
+class _FlakyServer:
+    """Serves a scripted sequence of status codes, then 200."""
+
+    def __init__(self, statuses, payload=None, retry_after=None):
+        import json as _json
+        import threading
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+
+        self.statuses = list(statuses)
+        self.requests = 0
+        self.headers_seen = []
+        outer = self
+        payload = payload or {"prices": [[1700000000000, 100.0], [1700086400000, 101.0],
+                                         [1700172800000, 99.0]]}
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def do_GET(self):
+                outer.requests += 1
+                outer.headers_seen.append(dict(self.headers))
+                code = outer.statuses.pop(0) if outer.statuses else 200
+                self.send_response(code)
+                if code == 429 and retry_after is not None:
+                    self.send_header("Retry-After", str(retry_after))
+                self.send_header("Content-Type", "application/json")
+                data = _json.dumps(payload).encode()
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+        self.server = HTTPServer(("127.0.0.1", 0), Handler)
+        self.url = f"http://127.0.0.1:{self.server.server_port}/probe"
+        self._thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+
+    def __enter__(self):
+        self._thread.start()
+        return self
+
+    def __exit__(self, *a):
+        self.server.shutdown()
+
+
+def test_transient_failures_are_retried():
+    """A rate limit mid-screen should cost seconds, not the whole run."""
+    from quant.data import _get
+    with _FlakyServer([429, 503, 200]) as server:
+        response = _get(server.url, what="test source")
+        assert response.status_code == 200
+        assert server.requests == 3, f"expected 2 retries then success, got {server.requests}"
+
+
+def test_persistent_rate_limit_gives_actionable_advice():
+    from quant.data import MAX_RETRIES, DataError, _get
+    with _FlakyServer([429] * 10) as server:
+        try:
+            _get(server.url, what="test source")
+        except DataError as exc:
+            assert "rate limited" in str(exc).lower()
+            assert "api key" in str(exc).lower(), "should suggest the fix"
+            assert server.requests == MAX_RETRIES
+            return
+    raise AssertionError("a persistent rate limit must raise")
+
+
+def test_client_errors_are_not_retried():
+    """A 404 is our mistake; retrying it wastes time and hides the cause."""
+    from quant.data import DataError, _get
+    with _FlakyServer([404, 200]) as server:
+        try:
+            _get(server.url, what="test source")
+        except DataError as exc:
+            assert "404" in str(exc)
+            assert server.requests == 1, "a 404 must not be retried"
+            return
+    raise AssertionError("a 404 must raise")
+
+
+def test_auth_failure_names_the_likely_cause():
+    from quant.data import DataError, _get
+    for status in (401, 403):
+        with _FlakyServer([status]) as server:
+            try:
+                _get(server.url, what="test source")
+            except DataError as exc:
+                assert "api key" in str(exc).lower(), f"{status} should mention a key"
+                continue
+            raise AssertionError(f"{status} must raise")
+
+
+def test_coingecko_key_header_matches_the_plan():
+    from quant.data import _coingecko_headers
+    saved = {k: os.environ.get(k) for k in ("COINGECKO_API_KEY", "COINGECKO_PLAN")}
+    try:
+        os.environ.pop("COINGECKO_API_KEY", None)
+        assert not any(k.startswith("x-cg") for k in _coingecko_headers()), \
+            "no key set means no key header"
+
+        os.environ["COINGECKO_API_KEY"] = "abc123"
+        os.environ["COINGECKO_PLAN"] = "demo"
+        assert _coingecko_headers()["x-cg-demo-api-key"] == "abc123"
+
+        os.environ["COINGECKO_PLAN"] = "pro"
+        assert _coingecko_headers()["x-cg-pro-api-key"] == "abc123"
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+def test_no_cache_mode_writes_nothing():
+    """datacheck probes live sources without polluting the cache.
+
+    Passing cache_dir=None used to raise TypeError deep inside the fetcher,
+    which masked the real network error behind a misleading one.
+    """
+    import tempfile
+    from unittest.mock import patch
+    from quant import data as qdata
+
+    payload = {"chart": {"error": None, "result": [{
+        "timestamp": [1700000000, 1700086400, 1700172800],
+        "indicators": {"quote": [{"close": [10.0, 11.0, 12.0]}]}}]}}
+
+    with tempfile.TemporaryDirectory() as tmp, \
+         patch("quant.data.requests.get", return_value=_mock_response(payload)):
+        frame = qdata.fetch_yahoo("TEST.JK", cache_dir=None)
+        assert len(frame) == 3
+        assert not list(Path(tmp).iterdir()), "nothing should have been written"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

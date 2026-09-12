@@ -1,4 +1,5 @@
 """Price data: load from CSV, fetch from Binance, or generate a synthetic null."""
+import os
 import time
 from pathlib import Path
 
@@ -12,6 +13,77 @@ YAHOO = "https://query1.finance.yahoo.com/v8/finance/chart"
 
 # Yahoo rejects requests without a browser-ish agent.
 UA = {"User-Agent": "Mozilla/5.0 (compatible; trading-research/1.0)"}
+
+RETRY_STATUS = {429, 500, 502, 503, 504}
+MAX_RETRIES = 4
+
+
+class DataError(RuntimeError):
+    """A data source refused or could not answer. Message says what to do."""
+
+
+def _coingecko_headers():
+    """CoinGecko keys go in a header whose name depends on the plan.
+
+    Free usage works without a key but is rate limited hard enough that a screen
+    of 30 coins will trip it. Set COINGECKO_API_KEY, and COINGECKO_PLAN=pro if
+    the key is a Pro one rather than a Demo one.
+    """
+    key = os.environ.get("COINGECKO_API_KEY", "").strip()
+    if not key:
+        return dict(UA)
+    plan = os.environ.get("COINGECKO_PLAN", "demo").strip().lower()
+    header = "x-cg-pro-api-key" if plan == "pro" else "x-cg-demo-api-key"
+    return {**UA, header: key}
+
+
+def _get(url, params=None, headers=None, timeout=30, what="the data source"):
+    """GET with backoff on the statuses that mean 'try again', not 'you are wrong'.
+
+    A rate limit is the single most common failure when screening many symbols,
+    and retrying it is the difference between a screen that finishes and one
+    that dies a third of the way through. A 4xx that is not 429 is our mistake
+    and is never retried.
+    """
+    delay = 1.0
+    last = None
+    for attempt in range(MAX_RETRIES):
+        try:
+            response = requests.get(url, params=params, headers=headers or UA, timeout=timeout)
+        except requests.RequestException as exc:
+            last = f"{type(exc).__name__}: {exc}"
+            if attempt == MAX_RETRIES - 1:
+                raise DataError(
+                    f"Could not reach {what}: {last}. Check your network, or a proxy "
+                    f"or firewall blocking it."
+                ) from exc
+            time.sleep(delay)
+            delay *= 2
+            continue
+
+        if response.status_code == 200:
+            return response
+
+        if response.status_code in RETRY_STATUS and attempt < MAX_RETRIES - 1:
+            # Honour Retry-After when the server sends one.
+            wait = float(response.headers.get("Retry-After", 0) or 0) or delay
+            time.sleep(min(wait, 30.0))
+            delay *= 2
+            continue
+
+        if response.status_code == 429:
+            raise DataError(
+                f"{what} rate limited this request and kept doing so after "
+                f"{MAX_RETRIES} attempts. Slow down, or set an API key."
+            )
+        if response.status_code in (401, 403):
+            raise DataError(
+                f"{what} refused the request ({response.status_code}). "
+                f"This usually means a missing or wrong API key."
+            )
+        raise DataError(f"{what} returned {response.status_code}: {response.text[:200]}")
+
+    raise DataError(f"{what} did not answer after {MAX_RETRIES} attempts ({last}).")
 
 
 def load_csv(path):
@@ -44,19 +116,17 @@ def fetch_binance(symbol="BTCUSDT", interval="1d", start="2019-01-01", cache_dir
     Won't run inside the Claude Code web sandbox (network policy blocks the host).
     Run it locally, then feed the CSV to the backtester.
     """
-    cache = Path(cache_dir) / f"{symbol}_{interval}_{start}.csv"
-    if cache.exists():
+    cache = Path(cache_dir) / f"{symbol}_{interval}_{start}.csv" if cache_dir else None
+    if cache and cache.exists():
         return load_csv(cache)
 
     start_ms = int(pd.Timestamp(start, tz="UTC").timestamp() * 1000)
     rows = []
     while True:
-        r = requests.get(
-            BINANCE,
-            params={"symbol": symbol, "interval": interval, "startTime": start_ms, "limit": 1000},
-            timeout=30,
-        )
-        r.raise_for_status()
+        r = _get(BINANCE,
+                 params={"symbol": symbol, "interval": interval,
+                         "startTime": start_ms, "limit": 1000},
+                 what=f"Binance ({symbol})")
         batch = r.json()
         if not batch:
             break
@@ -67,7 +137,8 @@ def fetch_binance(symbol="BTCUSDT", interval="1d", start="2019-01-01", cache_dir
         time.sleep(0.25)  # ponytail: fixed sleep, not a rate limiter. Binance allows far more.
 
     if not rows:
-        raise RuntimeError(f"Binance returned no data for {symbol} {interval} from {start}")
+        raise DataError(f"Binance returned no data for {symbol!r} {interval} from {start}. "
+                        "Check the pair exists on Binance spot (BTCUSDT, not BTC/USDT).")
 
     df = pd.DataFrame(rows, columns=[
         "open_time", "open", "high", "low", "close", "volume", "close_time",
@@ -77,8 +148,9 @@ def fetch_binance(symbol="BTCUSDT", interval="1d", start="2019-01-01", cache_dir
     df = df[["date", "open", "high", "low", "close", "volume"]].astype(
         {c: float for c in ("open", "high", "low", "close", "volume")}
     )
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(cache, index=False)
+    if cache:
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        df.to_csv(cache, index=False)
     return df.set_index("date").sort_index()
 
 
@@ -115,32 +187,31 @@ def fetch_coingecko(coin_id="bitcoin", days=365, vs_currency="usd", cache_dir="d
     `coin_id` is the slug, not the ticker: "bitcoin", "ethereum", "solana".
     Use `coingecko_top()` to discover ids. days>90 returns daily data.
     """
-    cache = Path(cache_dir) / f"cg_{coin_id}_{days}d_{vs_currency}.csv"
-    if cache.exists():
+    cache = Path(cache_dir) / f"cg_{coin_id}_{days}d_{vs_currency}.csv" if cache_dir else None
+    if cache and cache.exists():
         return load_csv(cache)
 
-    response = requests.get(
-        f"{COINGECKO}/coins/{coin_id}/market_chart",
-        params={"vs_currency": vs_currency, "days": days, "interval": "daily"},
-        headers=UA, timeout=30)
-    if response.status_code == 429:
-        raise RuntimeError("CoinGecko rate limit hit — free tier allows ~10-30 calls/min. Slow down.")
-    response.raise_for_status()
+    response = _get(f"{COINGECKO}/coins/{coin_id}/market_chart",
+                    params={"vs_currency": vs_currency, "days": days, "interval": "daily"},
+                    headers=_coingecko_headers(), what=f"CoinGecko ({coin_id})")
 
-    df = _series_from_pairs(response.json().get("prices", []))
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    df.reset_index(names="date").to_csv(cache, index=False)
+    prices = response.json().get("prices", [])
+    if not prices:
+        raise DataError(f"CoinGecko returned no prices for {coin_id!r}. "
+                        "Check the id — it is the slug ('bitcoin'), not the ticker ('BTC').")
+    df = _series_from_pairs(prices)
+    if cache:
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        df.reset_index(names="date").to_csv(cache, index=False)
     return df
 
 
 def coingecko_top(n=50, vs_currency="usd"):
     """Top `n` coin ids by market cap — the universe for a screen."""
-    response = requests.get(
-        f"{COINGECKO}/coins/markets",
-        params={"vs_currency": vs_currency, "order": "market_cap_desc",
-                "per_page": min(n, 250), "page": 1},
-        headers=UA, timeout=30)
-    response.raise_for_status()
+    response = _get(f"{COINGECKO}/coins/markets",
+                    params={"vs_currency": vs_currency, "order": "market_cap_desc",
+                            "per_page": min(n, 250), "page": 1},
+                    headers=_coingecko_headers(), what="CoinGecko (markets)")
     return [c["id"] for c in response.json()]
 
 
@@ -150,32 +221,33 @@ def fetch_yahoo(symbol="BBCA.JK", range_="5y", interval="1d", cache_dir="data"):
     IDX tickers take a .JK suffix (BBCA.JK, TLKM.JK, ASII.JK); US tickers are
     bare (AAPL); crypto uses BTC-USD.
     """
-    cache = Path(cache_dir) / f"yf_{symbol.replace('.', '_')}_{range_}_{interval}.csv"
-    if cache.exists():
+    cache = Path(cache_dir) / f"yf_{symbol.replace('.', '_')}_{range_}_{interval}.csv" if cache_dir else None
+    if cache and cache.exists():
         return load_csv(cache)
 
-    response = requests.get(f"{YAHOO}/{symbol}",
-                            params={"range": range_, "interval": interval},
-                            headers=UA, timeout=30)
-    response.raise_for_status()
+    response = _get(f"{YAHOO}/{symbol}", params={"range": range_, "interval": interval},
+                    what=f"Yahoo Finance ({symbol})")
     payload = response.json()
 
     error = (payload.get("chart") or {}).get("error")
     if error:
-        raise RuntimeError(f"Yahoo error for {symbol}: {error}")
+        raise DataError(f"Yahoo rejected {symbol!r}: {error}. IDX tickers need a .JK "
+                        "suffix (BBCA.JK); crypto uses BTC-USD.")
     results = (payload.get("chart") or {}).get("result") or []
     if not results:
-        raise RuntimeError(f"Yahoo returned no data for {symbol}")
+        raise DataError(f"Yahoo returned no data for {symbol!r}.")
 
     result = results[0]
     closes = result["indicators"]["quote"][0]["close"]
     pairs = [(t, c) for t, c in zip(result["timestamp"], closes) if c is not None]
     if not pairs:
-        raise RuntimeError(f"Yahoo returned only null closes for {symbol} (delisted or bad ticker?)")
+        raise DataError(f"Yahoo returned only null closes for {symbol!r} — "
+                        "delisted, suspended, or the wrong ticker.")
 
     df = _series_from_pairs(pairs, unit="s")
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    df.reset_index(names="date").to_csv(cache, index=False)
+    if cache:
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        df.reset_index(names="date").to_csv(cache, index=False)
     return df
 
 
