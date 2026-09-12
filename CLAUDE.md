@@ -74,6 +74,13 @@ python run_tests.py
 
 It exits non-zero when any file fails, so it is safe to gate on.
 
+**Documentation is checked, not trusted.** `tests/test_docs.py` asserts that
+every module appears in the Layout table, that no doc names a file that does not
+exist, that no doc hardcodes a test count, and that every test file keeps its
+runner last. All four checks exist because each of those drifted silently first.
+When editing docs from a script, assert the anchor — `str.replace` no-ops when
+it misses, and a chain of those quietly did nothing across several commits.
+
 **Synthetic data is the null hypothesis, and it is load-bearing.**
 `data.synthetic()` is a random walk; `data.synthetic_garch()` adds volatility
 clustering while keeping direction unforecastable. A strategy showing
@@ -97,12 +104,24 @@ correct the claim.
 |---|---|
 | `quant/backtest.py` | Execution, cost model, metrics. The correctness core. |
 | `quant/validate.py` | Walk-forward, block bootstrap, Sidak deflation |
-| `quant/strategies.py` | Strategy functions + parameter grids + `REGISTRY` |
+| `quant/strategies.py` | Strategy functions, parameter grids, `REGISTRY` |
 | `quant/data.py` | CSV, Binance, CoinGecko, Yahoo, synthetic generators |
-| `quant/broker.py` | PaperBroker (tested), BinanceBroker (untested live) |
+| `quant/risk.py` | Cost drag, break-even hurdle, ruin probability, Kelly |
+| `quant/agents.py` | Research/skeptic/cost/risk agents and the desk |
+| `quant/broker.py` | PaperBroker, BinanceBroker (never live-traded) |
 | `quant/live.py` | Trading loop, kill switch, state file |
-| `run.py` / `screen.py` / `trade.py` | CLIs |
+| `quant/notify.py` | Rate-limited webhook alerts for unattended runs |
+| `run.py` | Walk-forward one strategy on one asset |
+| `screen.py` | Screen many assets, deflating for every trial |
+| `analyze.py` | What profit requires and what prevents it |
+| `desk.py` | Put a proposal to the agent desk |
+| `trade.py` | Paper or live trading |
+| `run_tests.py` | Runs every self-check, non-zero on failure |
 | `web/app.py` | Token-auth dashboard, localhost-bound |
+| `deploy/trading-agent.service` | systemd unit for unattended running |
+
+Adding a module means adding a row. `tests/test_docs.py` fails otherwise — the
+table drifted silently for seven files before that check existed.
 
 ## Strategy contract
 

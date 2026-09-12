@@ -11,7 +11,7 @@ when that's the truth — which it usually is.
 
 ```bash
 pip install -r requirements.txt
-python run_tests.py                                  # 51 self-checks
+python run_tests.py                                  # every self-check
 python run.py --synthetic --strategy sma_cross      # random-walk sanity run
 ```
 
@@ -149,7 +149,7 @@ strategy selection does.
 | `run.py` | CLI |
 | `quant/risk.py` | Cost drag, break-even, ruin probability, Kelly |
 | `analyze.py` | What profit requires and what prevents it |
-| `tests/` | 42 self-checks across four files, no framework |
+| `tests/` | Self-checks, plain asserts, no framework |
 
 ## Writing a strategy
 
