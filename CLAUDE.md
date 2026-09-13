@@ -60,6 +60,12 @@ asked:
 - **A halt outlives its process.** The drawdown halt and peak persist to the
   state file and reload on start. Never let a restart reset them — that hands a
   just-stopped strategy a fresh allowance to lose. Only `--reset` clears it.
+- **Background work outlives its bookkeeping.** A screen job may only be
+  evicted once it is finished, and progress updates tolerate a job that is
+  already gone. Evicting a running job used to kill its thread *and* the
+  handler meant to record the failure, leaving the page polling a 404. Only one
+  screen runs at a time — each spawns a process pool, and several oversubscribe
+  the machine.
 - **State writes are atomic.** The dashboard polls the state file while the
   trader rewrites it, so write to a temp file and rename. And never report an
   unreadable state as "not running" — unknown is not the same as flat.

@@ -171,9 +171,20 @@ MAX_JOBS_KEPT = 8
 def _run_screen(job_id, strategy, universe, count, folds):
     from screen import evaluate_all
 
+    TERMINAL = ("done", "failed")
+
     def note(**fields):
+        """Record progress, tolerating a job that has been evicted.
+
+        Eviction used to race a running job: the thread would KeyError here,
+        and so would the handler meant to record the failure. Losing a status
+        update is survivable; taking down the thread that produces the result
+        is not.
+        """
         with _JOBS_LOCK:
-            _JOBS[job_id].update(fields)
+            job = _JOBS.get(job_id)
+            if job is not None:
+                job.update(fields)
 
     try:
         note(stage="loading")
@@ -230,13 +241,25 @@ def api_screen_start():
         return jsonify({"error": f"unknown strategy {strategy}"}), 400
 
     universe = payload.get("universe", "synthetic")
+    if universe not in ("synthetic", "cached"):
+        return jsonify({"error": f"unknown universe {universe!r}"}), 400
     count = max(2, min(int(payload.get("count", 40)), 300))
     folds = max(2, min(int(payload.get("folds", 4)), 8))
 
     job_id = secrets.token_urlsafe(8)
     with _JOBS_LOCK:
-        for stale in sorted(_JOBS, key=lambda j: _JOBS[j]["started"])[:-MAX_JOBS_KEPT]:
+        # One screen at a time. Each spawns a process pool, and several at once
+        # oversubscribe the machine badly enough to slow all of them down. Hand
+        # back the running job so the page attaches to it rather than queueing.
+        for existing, job in _JOBS.items():
+            if job["stage"] not in ("done", "failed"):
+                return jsonify({"job": existing, "already_running": True})
+
+        # Only finished jobs may be evicted; a running one still needs its slot.
+        finished = [j for j in _JOBS if _JOBS[j]["stage"] in ("done", "failed")]
+        for stale in sorted(finished, key=lambda j: _JOBS[j]["started"])[:-MAX_JOBS_KEPT]:
             _JOBS.pop(stale, None)
+
         _JOBS[job_id] = {"stage": "queued", "started": time.time(),
                          "strategy": strategy, "universe": universe, "requested": count}
 

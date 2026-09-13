@@ -612,6 +612,70 @@ def test_new_endpoints_require_auth():
     assert anonymous.get("/api/screen/anything").status_code == 401
 
 
+
+def test_a_running_screen_is_never_evicted():
+    """Eviction used to race running jobs: note() KeyErrored, the thread died,
+    and the handler meant to record the failure KeyErrored too. The user polling
+    that job got a bare 404."""
+    client, dashboard = _client()
+
+    for _ in range(dashboard.MAX_JOBS_KEPT + 6):
+        client.post("/api/screen", json={"universe": "synthetic", "count": 8})
+        time.sleep(0.05)
+
+    deadline = time.time() + 60
+    while time.time() < deadline:
+        stages = [j["stage"] for j in dashboard._JOBS.values()]
+        if all(s in ("done", "failed") for s in stages):
+            break
+        time.sleep(0.3)
+
+    assert stages, "no jobs retained at all"
+    assert all(s in ("done", "failed") for s in stages), \
+        f"a job was left mid-flight by eviction: {stages}"
+    assert not any(s == "failed" for s in stages), "no job should have crashed"
+
+
+def test_only_one_screen_runs_at_a_time():
+    """Each screen spawns a process pool; several at once oversubscribe the box."""
+    client, _ = _client()
+    starts = [client.post("/api/screen", json={"universe": "synthetic", "count": 40}).get_json()
+              for _ in range(4)]
+    assert len({s["job"] for s in starts}) == 1, "four clicks should share one run"
+    assert sum("already_running" in s for s in starts) == 3, "reuse must be reported to the page"
+
+    job = starts[0]["job"]
+    deadline = time.time() + 90
+    while time.time() < deadline:
+        state = client.get(f"/api/screen/{job}").get_json()
+        if state["stage"] in ("done", "failed"):
+            break
+        time.sleep(0.3)
+    assert state["stage"] == "done", state.get("error")
+
+
+def test_unknown_universe_is_refused_before_work_starts():
+    client, _ = _client()
+    response = client.post("/api/screen", json={"universe": "../../etc"})
+    assert response.status_code == 400
+    assert "universe" in response.get_json()["error"]
+
+
+def test_screen_inputs_are_clamped():
+    client, _ = _client()
+    for payload, field, bound in [({"count": 99999}, "requested", 300),
+                                  ({"count": -5}, "requested", 2)]:
+        started = client.post("/api/screen", json={**payload, "universe": "synthetic"}).get_json()
+        state = client.get(f"/api/screen/{started['job']}").get_json()
+        assert state[field] == bound, f"{payload} should clamp {field} to {bound}, got {state[field]}"
+        deadline = time.time() + 90
+        while time.time() < deadline:
+            state = client.get(f"/api/screen/{started['job']}").get_json()
+            if state["stage"] in ("done", "failed"):
+                break
+            time.sleep(0.3)
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

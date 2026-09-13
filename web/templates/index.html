@@ -640,6 +640,10 @@ $("#sc-run").addEventListener("click", async () => {
     out.innerHTML = `<div class="alert bad">${icon("i-alert")}<div>${started.error}</div></div>`;
     btn.disabled = false; return;
   }
+  if (started.already_running) {
+    // One screen at a time: several pools at once oversubscribe the machine.
+    out.querySelector(".foot").textContent = "A screen is already running — attaching to it…";
+  }
 
   clearInterval(screenPoll);
   screenPoll = setInterval(async () => {
