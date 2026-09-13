@@ -10,6 +10,7 @@ Exposing it beyond localhost needs --host and is a deliberate, warned-about act.
 import argparse
 import hmac
 import os
+import re
 import secrets
 import sys
 import threading
@@ -168,6 +169,120 @@ _JOBS_LOCK = threading.Lock()
 MAX_JOBS_KEPT = 8
 
 
+def _start_job(kind, worker, *args):
+    """Run `worker(note, *args)` in a thread, tracked in the shared registry.
+
+    Three long operations now need this — screening, connectivity checks, and
+    fetching — so it lives in one place. `note` is the only way a worker reports
+    progress, and it tolerates a job that has been evicted: losing a status line
+    is survivable, losing the thread that produces the result is not.
+    """
+    with _JOBS_LOCK:
+        for existing, job in _JOBS.items():
+            if job["kind"] == kind and job["stage"] not in ("done", "failed"):
+                return existing, True
+
+        finished = [j for j in _JOBS if _JOBS[j]["stage"] in ("done", "failed")]
+        for stale in sorted(finished, key=lambda j: _JOBS[j]["started"])[:-MAX_JOBS_KEPT]:
+            _JOBS.pop(stale, None)
+
+        job_id = secrets.token_urlsafe(8)
+        _JOBS[job_id] = {"kind": kind, "stage": "queued", "started": time.time()}
+
+    def note(**fields):
+        with _JOBS_LOCK:
+            job = _JOBS.get(job_id)
+            if job is not None:
+                job.update(fields)
+
+    def run():
+        try:
+            worker(note, *args)
+        except Exception as exc:
+            app.logger.exception("%s job failed", kind)
+            note(stage="failed", error=f"{type(exc).__name__}: {exc}")
+
+    threading.Thread(target=run, daemon=True).start()
+    return job_id, False
+
+
+# Symbols reach a URL, so they are constrained to what a ticker can contain.
+SYMBOL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,23}$")
+
+
+def _short_reason(exc):
+    """One readable line, not a urllib3 stack dump.
+
+    Four sources failing the same way produced four near-identical 240-character
+    blocks on a screen whose only job is saying what is wrong. Keep the cause
+    and drop the retry chatter and the echoed URL.
+    """
+    text = str(exc)
+    if "Tunnel connection failed" in text or "ProxyError" in text:
+        host = re.search(r"host='([^']+)'", text)
+        return (f"No outbound connection to {host.group(1) if host else 'the host'} — "
+                "a proxy or firewall refused it.")
+    if "NameResolution" in text or "Name or service not known" in text:
+        return "DNS could not resolve the host. Check the network."
+    if "timed out" in text.lower():
+        return "The request timed out."
+    # Our own DataError messages are already written for a reader; keep them.
+    return text.split(" (Caused by")[0][:200]
+
+
+def _check_sources(note):
+    """Probe each data source the way datacheck.py does, reporting as it goes."""
+    probes = [
+        ("Binance", "BTCUSDT daily",
+         lambda: data.fetch_binance("BTCUSDT", "1d", start="2024-06-01", cache_dir=None)),
+        ("CoinGecko", "bitcoin, 90 days",
+         lambda: data.fetch_coingecko("bitcoin", days=90, cache_dir=None)),
+        ("Yahoo crypto", "BTC-USD 1y",
+         lambda: data.fetch_yahoo("BTC-USD", range_="1y", cache_dir=None)),
+        ("Yahoo IDX", "BBCA.JK 1y",
+         lambda: data.fetch_yahoo("BBCA.JK", range_="1y", cache_dir=None)),
+    ]
+    results = []
+    note(stage="checking", total=len(probes), results=results)
+    for name, description, call in probes:
+        try:
+            frame = call()
+            close = frame["close"]
+            results.append({"source": name, "ok": True, "detail": description,
+                            "rows": len(close), "first": str(close.index[0].date()),
+                            "last": str(close.index[-1].date()),
+                            "latest": round(float(close.iloc[-1]), 4)})
+        except Exception as exc:
+            results.append({"source": name, "ok": False, "detail": description,
+                            "error": _short_reason(exc)})
+        note(results=list(results), done=len(results))
+    note(stage="done", results=results,
+         working=sum(r["ok"] for r in results), total=len(probes))
+
+
+def _fetch_symbols(note, source, symbols):
+    """Fetch into data/ so the Screen and Research views can use real prices."""
+    note(stage="fetching", total=len(symbols), done=0, results=[])
+    results = []
+
+    def progress(done, total, label, ok):
+        note(done=done, total=total, current=label)
+
+    if source == "yahoo":
+        frames, failures = data.fetch_many_yahoo(symbols, on_progress=progress)
+    else:
+        frames, failures = data.fetch_many(symbols, on_progress=progress)
+
+    for label, frame in frames:
+        close = frame["close"]
+        results.append({"symbol": label, "ok": True, "rows": len(close),
+                        "first": str(close.index[0].date()), "last": str(close.index[-1].date())})
+    for label, reason in failures.items():
+        results.append({"symbol": label, "ok": False, "error": str(reason)[:240]})
+
+    note(stage="done", results=results, fetched=len(frames), failed=len(failures))
+
+
 def _run_screen(job_id, strategy, universe, count, folds):
     from screen import evaluate_all
 
@@ -252,7 +367,7 @@ def api_screen_start():
         # oversubscribe the machine badly enough to slow all of them down. Hand
         # back the running job so the page attaches to it rather than queueing.
         for existing, job in _JOBS.items():
-            if job["stage"] not in ("done", "failed"):
+            if job.get("kind") == "screen" and job["stage"] not in ("done", "failed"):
                 return jsonify({"job": existing, "already_running": True})
 
         # Only finished jobs may be evicted; a running one still needs its slot.
@@ -260,7 +375,7 @@ def api_screen_start():
         for stale in sorted(finished, key=lambda j: _JOBS[j]["started"])[:-MAX_JOBS_KEPT]:
             _JOBS.pop(stale, None)
 
-        _JOBS[job_id] = {"stage": "queued", "started": time.time(),
+        _JOBS[job_id] = {"kind": "screen", "stage": "queued", "started": time.time(),
                          "strategy": strategy, "universe": universe, "requested": count}
 
     threading.Thread(target=_run_screen, args=(job_id, strategy, universe, count, folds),
@@ -281,6 +396,71 @@ def api_screen_status(job_id):
 
 
 # -------------------------------------------------------------------- desk
+# ---------------------------------------------------------------- data
+@app.route("/api/data")
+@require_auth
+def api_data_status():
+    """What is cached, and whether a key is configured. No network."""
+    cached = []
+    for path in sorted(Path("data").glob("*.csv")) if Path("data").exists() else []:
+        try:
+            close = data.load_csv(path)["close"]
+        except (ValueError, OSError):
+            continue           # a non-OHLCV CSV sitting in data/ is not an error
+        cached.append({"file": path.name, "rows": len(close),
+                       "first": str(close.index[0].date()), "last": str(close.index[-1].date())})
+    return jsonify({
+        "cached": cached,
+        "coingecko_key": bool(os.environ.get("COINGECKO_API_KEY", "").strip()),
+        "coingecko_plan": os.environ.get("COINGECKO_PLAN", "demo"),
+    })
+
+
+@app.route("/api/data/check", methods=["POST"])
+@require_auth
+def api_data_check():
+    job_id, reused = _start_job("check", _check_sources)
+    return jsonify({"job": job_id, "already_running": reused})
+
+
+@app.route("/api/data/fetch", methods=["POST"])
+@require_auth
+def api_data_fetch():
+    payload = request.get_json(silent=True) or {}
+    source = payload.get("source", "yahoo")
+    if source not in ("yahoo", "coingecko"):
+        return jsonify({"error": f"unknown source {source!r}"}), 400
+
+    raw = payload.get("symbols") or []
+    if isinstance(raw, str):
+        raw = re.split(r"[\s,]+", raw)
+    symbols = [sym.strip() for sym in raw if sym.strip()]
+
+    bad = [sym for sym in symbols if not SYMBOL_RE.match(sym)]
+    if bad:
+        return jsonify({"error": f"not valid symbols: {', '.join(bad[:4])}"}), 400
+    if not symbols:
+        return jsonify({"error": "no symbols given"}), 400
+    if len(symbols) > 60:
+        return jsonify({"error": "at most 60 symbols per fetch"}), 400
+
+    job_id, reused = _start_job("fetch", _fetch_symbols, source, symbols)
+    return jsonify({"job": job_id, "already_running": reused})
+
+
+@app.route("/api/job/<job_id>")
+@require_auth
+def api_job(job_id):
+    """Status for any background job — screen, check or fetch."""
+    with _JOBS_LOCK:
+        job = _JOBS.get(job_id)
+        if job is None:
+            return jsonify({"error": "no such job"}), 404
+        snapshot = dict(job)
+    snapshot["elapsed"] = round(time.time() - snapshot["started"], 1)
+    return jsonify(snapshot)
+
+
 @app.route("/api/desk")
 @require_auth
 def api_desk():

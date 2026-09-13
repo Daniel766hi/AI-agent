@@ -676,6 +676,95 @@ def test_screen_inputs_are_clamped():
             time.sleep(0.3)
 
 
+
+# --- fetching data from the browser -----------------------------------------
+
+def _await_job(client, job_id, limit=120):
+    deadline = time.time() + limit
+    while time.time() < deadline:
+        state = client.get(f"/api/job/{job_id}").get_json()
+        if state["stage"] in ("done", "failed"):
+            return state
+        time.sleep(0.3)
+    raise AssertionError(f"job {job_id} did not finish in {limit}s")
+
+
+def test_data_view_is_the_fifth_tab_and_no_more():
+    """Five is the bottom-bar limit; a sixth would not fit on a phone."""
+    client, _ = _client()
+    html = client.get("/").get_data(as_text=True)
+    assert 'id="view-data"' in html and 'data-view="data"' in html
+    assert html.count('class="tab" role="tab"') <= 5
+
+
+def test_fetch_refuses_anything_that_is_not_a_symbol():
+    """Symbols reach a URL, so they are constrained to what a ticker can contain."""
+    client, _ = _client()
+    for symbols, label in [(["../../etc/passwd"], "traversal"),
+                           (["BBCA.JK; rm -rf /"], "injection"),
+                           (["A" * 40], "over-length"),
+                           (["<script>alert(1)</script>"], "markup"),
+                           ([], "empty"),
+                           (["X"] * 80, "too many")]:
+        response = client.post("/api/data/fetch", json={"source": "yahoo", "symbols": symbols})
+        assert response.status_code == 400, f"{label} was accepted"
+        assert "error" in response.get_json()
+
+
+def test_fetch_refuses_an_unknown_source():
+    client, _ = _client()
+    response = client.post("/api/data/fetch", json={"source": "sketchy", "symbols": ["BBCA.JK"]})
+    assert response.status_code == 400
+
+
+def test_source_check_reports_failure_honestly():
+    """This sandbox blocks every source. The check must say so, not look broken."""
+    client, _ = _client()
+    started = client.post("/api/data/check").get_json()
+    job = _await_job(client, started["job"])
+
+    assert job["stage"] == "done", job.get("error")
+    assert job["total"] == len(job["results"])
+    for result in job["results"]:
+        assert "source" in result and "detail" in result
+        if not result["ok"]:
+            assert result["error"], f"{result['source']} failed without saying why"
+            assert "Traceback" not in result["error"]
+            assert len(result["error"]) < 220, "a diagnostic must be readable, not a stack dump"
+
+
+def test_failure_reasons_are_readable_not_stack_dumps():
+    """Four sources failing the same way produced four identical urllib3 walls."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "web"))
+    import app as dashboard
+
+    proxy = Exception("HTTPSConnectionPool(host='api.binance.com', port=443): Max retries "
+                      "exceeded with url: /api/v3/klines (Caused by ProxyError('Unable to "
+                      "connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))")
+    reason = dashboard._short_reason(proxy)
+    assert "api.binance.com" in reason, "must still name the host"
+    assert len(reason) < 120 and "Caused by" not in reason
+
+
+def test_data_status_lists_the_cache_without_touching_the_network():
+    client, _ = _client()
+    body = client.get("/api/data").get_json()
+    assert isinstance(body["cached"], list)
+    assert "coingecko_key" in body
+    for entry in body["cached"]:
+        assert {"file", "rows", "first", "last"} <= set(entry)
+
+
+def test_one_job_of_each_kind_runs_at_a_time():
+    """A screen and a fetch may overlap; two screens may not."""
+    client, _ = _client()
+    first = client.post("/api/data/check").get_json()
+    second = client.post("/api/data/check").get_json()
+    assert first["job"] == second["job"], "a second check should attach to the running one"
+    assert second["already_running"] is True
+    _await_job(client, first["job"])
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

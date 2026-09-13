@@ -531,12 +531,21 @@ directly (`#screen`).
 | View | What it does |
 |---|---|
 | Live | Position, equity, drawdown, trading costs, recent fills. Polls every 15s. |
+| Data | Which sources reach this machine, fetching symbols into the cache, what is cached |
 | Screen | Many assets at once, with the per-asset and whole-screen p-values side by side |
 | Desk | One proposal through all four agents, every mandate and verdict shown |
 | Research | Walk-forward validation, plus the cost hurdle and leverage ruin table |
 
-Four tabs rather than seven because a bottom bar holds five at most; Costs and
-Trades are sections of Live, and Validation and Analysis are both Research.
+**Data** closes the loop: until it existed the browser could only work on
+synthetic series and CSVs put there from a terminal. It probes each source and
+reports what is actually wrong with the ones that fail — naming the host, not
+dumping a urllib3 traceback — then fetches symbols into the cache, where Screen
+and Research pick them up. Symbols are validated against what a ticker can
+contain before they reach a URL.
+
+Five tabs, which is exactly what a bottom bar holds; Costs and Trades are
+sections of Live, and Validation and Analysis are both Research. A sixth would
+not fit on a phone, and a test asserts there is no sixth.
 
 A screen over real coins is minutes of network, well past any request timeout,
 so it runs as a background job the page polls — stage and elapsed time while it

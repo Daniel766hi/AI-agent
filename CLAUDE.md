@@ -60,6 +60,12 @@ asked:
 - **A halt outlives its process.** The drawdown halt and peak persist to the
   state file and reload on start. Never let a restart reset them — that hands a
   just-stopped strategy a fresh allowance to lose. Only `--reset` clears it.
+- **Anything reaching a URL is validated first.** Symbols fetched from the
+  browser must match what a ticker can contain — traversal, injection, markup
+  and over-length are refused with a 400 before any request is made.
+- **A diagnostic reads like a sentence.** The Data view says which host refused
+  and why; it never shows a urllib3 traceback. Four sources failing the same way
+  must not produce four identical walls of text.
 - **Background work outlives its bookkeeping.** A screen job may only be
   evicted once it is finished, and progress updates tolerate a job that is
   already gone. Evicting a running job used to kill its thread *and* the
