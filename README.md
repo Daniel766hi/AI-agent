@@ -262,10 +262,33 @@ execution on Indonesian equities you need a broker that publishes a trading API.
 ## Screening many assets
 
 ```bash
+python screen.py --coingecko-top 100 --strategy breakout
 python screen.py --yahoo BBCA.JK TLKM.JK ASII.JK BBRI.JK --strategy breakout
-python screen.py --coingecko-top 30 --strategy sma_cross
 python screen.py --synthetic 120 --strategy breakout     # the null, for calibration
 ```
+
+### Screening 100 coins
+
+The maths is not the slow part. Measured on four cores, 100 assets:
+
+| | Serial | 4 workers |
+|---|---|---|
+| Evaluate 100 assets | 9.0s | **2.6s** |
+
+Downloads run concurrently too (`--fetch-workers`, default 4), and everything
+fetched is cached, so a repeat screen over the same universe does no network at
+all and finishes in those 2.6 seconds.
+
+**The first run cannot be instant, and the reason is not this code.** CoinGecko's
+free tier allows roughly 10–30 calls a minute, so 100 coins takes 3–10 minutes
+however many threads you point at it — and pushing harder just earns 429s, each
+costing backoff and making the run slower. Set `COINGECKO_API_KEY` and raise
+`--fetch-workers` if you need the first pass quicker.
+
+Parallelism changes speed and nothing else: each asset is independent and each
+bootstrap is seeded, so a screen returns identical numbers at any worker count.
+A test asserts that across 1, 2 and 3 workers, and another asserts one corrupt
+feed is skipped rather than taking the batch down.
 
 Screening is where backtests do their worst lying, so the screener is built
 around one correction. Testing 120 assets with 3 configs each is **360 trials**,

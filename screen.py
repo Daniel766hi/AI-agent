@@ -11,7 +11,9 @@ charges you for every one of them: the reported p-value is deflated by
 (assets x parameter combinations), not just the combinations.
 """
 import argparse
+import os
 import sys
+import time
 
 from quant import data
 from quant.backtest import metrics
@@ -27,6 +29,53 @@ def evaluate(close, strategy, folds=4):
     return metrics(oos), metrics(benchmark), p_raw, n_combos
 
 
+def _progress(done, total, label, ok):
+    mark = "." if ok else "x"
+    end = "\n" if done == total else ""
+    print(f"\r  fetching {done}/{total} {mark} {label[:18]:<18}", end=end, file=sys.stderr, flush=True)
+
+
+def _report_failures(failures):
+    for label, reason in failures.items():
+        print(f"  skip {label}: {reason}", file=sys.stderr)
+
+
+def _evaluate_one(job):
+    """Worker entry point. Must be module level to survive pickling.
+
+    Returns a plain dict rather than raising, so one bad asset cannot take the
+    pool down with it — the screen reports the skip and carries on.
+    """
+    label, close, strategy, folds = job
+    try:
+        strat, bench, p_raw, n_combos = evaluate(close, strategy, folds)
+        return {"asset": label, "ok": True, "sharpe": strat["sharpe"],
+                "bench_sharpe": bench["sharpe"], "total_return": strat["total_return"],
+                "max_dd": strat["max_drawdown"], "p_raw": p_raw, "n_combos": n_combos}
+    except (ValueError, KeyError) as exc:
+        return {"asset": label, "ok": False, "error": str(exc)}
+
+
+def evaluate_all(assets, strategy, folds=4, workers=None):
+    """Evaluate every asset, across processes when it is worth the overhead.
+
+    Each asset is independent and each bootstrap is seeded, so results do not
+    depend on how the work is divided — a parallel screen and a serial one
+    return the same numbers. A test asserts that.
+    """
+    jobs = [(label, close, strategy, folds) for label, close in assets]
+    if workers is None:
+        workers = min(os.cpu_count() or 1, 8)
+
+    # Process startup costs more than the work itself on a handful of assets.
+    if workers <= 1 or len(jobs) < 8:
+        return [_evaluate_one(job) for job in jobs]
+
+    from concurrent.futures import ProcessPoolExecutor
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        return list(pool.map(_evaluate_one, jobs, chunksize=max(1, len(jobs) // (workers * 4))))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     universe = ap.add_mutually_exclusive_group(required=True)
@@ -38,6 +87,10 @@ def main():
     ap.add_argument("--strategy", default="breakout", choices=sorted(REGISTRY))
     ap.add_argument("--folds", type=int, default=4)
     ap.add_argument("--days", type=int, default=730, help="CoinGecko history length")
+    ap.add_argument("--workers", type=int, default=None,
+                    help="processes for the maths (default: one per core, max 8)")
+    ap.add_argument("--fetch-workers", type=int, default=4,
+                    help="concurrent downloads; raise only with an API key")
     args = ap.parse_args()
 
     # Build the universe as (label, close series) pairs.
@@ -46,17 +99,16 @@ def main():
         assets = [(f"noise_{i:03d}", data.synthetic(n=1200, seed=5000 + i)["close"])
                   for i in range(args.synthetic)]
     elif args.coingecko_top:
-        for coin in data.coingecko_top(args.coingecko_top):
-            try:
-                assets.append((coin, data.fetch_coingecko(coin, days=args.days)["close"]))
-            except Exception as exc:
-                print(f"  skip {coin}: {exc}", file=sys.stderr)
+        ids = data.coingecko_top(args.coingecko_top)
+        frames, failures = data.fetch_many(ids, days=args.days, workers=args.fetch_workers,
+                                           on_progress=_progress)
+        assets = [(c, f["close"]) for c, f in frames]
+        _report_failures(failures)
     elif args.yahoo:
-        for symbol in args.yahoo:
-            try:
-                assets.append((symbol, data.fetch_yahoo(symbol)["close"]))
-            except Exception as exc:
-                print(f"  skip {symbol}: {exc}", file=sys.stderr)
+        frames, failures = data.fetch_many_yahoo(args.yahoo, workers=args.fetch_workers,
+                                                 on_progress=_progress)
+        assets = [(s, f["close"]) for s, f in frames]
+        _report_failures(failures)
     else:
         from pathlib import Path
         for path in sorted(Path(args.csv_dir).glob("*.csv")):
@@ -68,15 +120,13 @@ def main():
     if not assets:
         sys.exit("No assets loaded.")
 
-    rows, n_combos = [], 0
-    for label, close in assets:
-        try:
-            strat, bench, p_raw, n_combos = evaluate(close, args.strategy, args.folds)
-            rows.append({"asset": label, "sharpe": strat["sharpe"], "bench_sharpe": bench["sharpe"],
-                         "total_return": strat["total_return"], "max_dd": strat["max_drawdown"],
-                         "p_raw": p_raw})
-        except ValueError as exc:
-            print(f"  skip {label}: {exc}", file=sys.stderr)
+    started = time.time()
+    outcomes = evaluate_all(assets, args.strategy, args.folds, workers=args.workers)
+    rows = [o for o in outcomes if o["ok"]]
+    n_combos = rows[0]["n_combos"] if rows else 0
+    for failed in (o for o in outcomes if not o["ok"]):
+        print(f"  skip {failed['asset']}: {failed['error']}", file=sys.stderr)
+    elapsed = time.time() - started
 
     if not rows:
         sys.exit("No asset had enough history to validate.")
@@ -92,6 +142,7 @@ def main():
     print(f"\n{'=' * 82}")
     print(f"  {args.strategy} screened across {len(rows)} assets, {n_combos} configs each")
     print(f"  {total_trials} total trials — that is the number the p-value must survive")
+    print(f"  evaluated in {elapsed:.1f}s")
     print(f"{'=' * 82}\n")
     print(f"{'Asset':<22}{'Sharpe':>9}{'vs hold':>9}{'Return':>10}{'MaxDD':>9}{'p (naive)':>12}{'p (honest)':>12}")
     print("-" * 82)

@@ -312,3 +312,67 @@ def synthetic_regimes(n=2500, seed=0, mean_length=120, bull_drift=1.4, bear_drif
     close = start_price * np.exp(np.cumsum(returns[:n]))
     return pd.DataFrame({"close": close},
                         index=pd.date_range("2015-01-01", periods=n, freq="D"))
+
+
+def fetch_many(coin_ids, days=730, vs_currency="usd", cache_dir="data",
+               workers=4, on_progress=None):
+    """Fetch several CoinGecko coins concurrently, skipping the ones that fail.
+
+    Fetching is I/O bound, so threads are the right tool and a small pool is the
+    right size: the limit here is the API's rate limit, not this machine. Four
+    concurrent requests is enough to keep the pipe busy without turning a free
+    tier into a wall of 429s — each of which then costs backoff and makes the
+    run slower, not faster. With a key you can raise it.
+
+    Anything already cached is returned without a request at all, which is why a
+    second run over the same universe is fast and a first one cannot be.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    results, failures = {}, {}
+
+    def one(coin_id):
+        return coin_id, fetch_coingecko(coin_id, days=days, vs_currency=vs_currency,
+                                        cache_dir=cache_dir)
+
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+        futures = {pool.submit(one, c): c for c in coin_ids}
+        for done, future in enumerate(as_completed(futures), 1):
+            coin_id = futures[future]
+            try:
+                _, frame = future.result()
+                results[coin_id] = frame
+            except Exception as exc:
+                failures[coin_id] = str(exc)
+            if on_progress:
+                on_progress(done, len(futures), coin_id, coin_id in results)
+
+    # Preserve the caller's ordering; a dict of futures completes out of order.
+    ordered = [(c, results[c]) for c in coin_ids if c in results]
+    return ordered, failures
+
+
+def fetch_many_yahoo(symbols, range_="5y", interval="1d", cache_dir="data",
+                     workers=4, on_progress=None):
+    """Same, for Yahoo tickers."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    results, failures = {}, {}
+
+    def one(symbol):
+        return symbol, fetch_yahoo(symbol, range_=range_, interval=interval, cache_dir=cache_dir)
+
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+        futures = {pool.submit(one, s): s for s in symbols}
+        for done, future in enumerate(as_completed(futures), 1):
+            symbol = futures[future]
+            try:
+                _, frame = future.result()
+                results[symbol] = frame
+            except Exception as exc:
+                failures[symbol] = str(exc)
+            if on_progress:
+                on_progress(done, len(futures), symbol, symbol in results)
+
+    ordered = [(s, results[s]) for s in symbols if s in results]
+    return ordered, failures

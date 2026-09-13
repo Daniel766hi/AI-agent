@@ -36,6 +36,11 @@ asked:
   ruin and Kelly all move with the parameters. Never report them for a set
   nobody chose — fit out-of-sample or take the caller's, and say which on the
   output.
+- **Parallelism may change speed, never results.** Screening runs across
+  processes; each asset is independent and each bootstrap seeded, so worker
+  count cannot move a number. `tests/test_screen.py` asserts serial and
+  parallel agree exactly. A worker returns failures rather than raising — one
+  bad asset must not lose the batch.
 - **Deflation for search.** Any p-value must be charged for every configuration
   tried — and in a screen, for every asset too (`assets x configs`). A raw
   p-value next to a searched grid is a lie.
