@@ -477,9 +477,17 @@
             <label for="strategy">Strategy</label>
             <select id="strategy">{% for s in strategies %}<option value="{{ s }}">{{ s }}</option>{% endfor %}</select>
           </div>
+          <div class="field">
+            <label for="rs-data">Data</label>
+            <select id="rs-data">
+              <option value="synthetic">synthetic (no structure)</option>
+            </select>
+          </div>
           <button class="btn primary" id="run" type="button"><svg aria-hidden="true"><use href="#i-play"/></svg>Validate</button>
           <button class="btn" id="an-run" type="button"><svg aria-hidden="true"><use href="#i-shield"/></svg>Cost &amp; risk</button>
         </div>
+        <p class="foot">Synthetic data has no forecastable structure &mdash; an edge there is a bug,
+        not a signal. Prices fetched on the Data tab appear here once cached.</p>
       </div></div>
       <div id="result"></div>
       <div id="an-out"></div>
@@ -634,7 +642,8 @@ $("#run").addEventListener("click", async () => {
 
   let r;
   try {
-    r = await (await fetch("/api/backtest?strategy=" + encodeURIComponent($("#strategy").value))).json();
+    r = await (await fetch("/api/backtest?strategy=" + encodeURIComponent($("#strategy").value)
+      + dataQuery($("#rs-data")))).json();
   } catch {
     result.innerHTML = `<div class="alert bad">${icon("i-alert")}<div>Request failed. Is the server still running?</div></div>`;
     btn.disabled = false; return;
@@ -684,9 +693,47 @@ function pollJob(id, onTick, onDone) {
   return timer;
 }
 
+/* A cached CSV and a synthetic generator are both just "the data" to the
+   endpoints, so both pickers carry the same options and build the same query. */
+function dataQuery(select) {
+  const v = select.value;
+  return v.startsWith("csv:")
+    ? "&csv=" + encodeURIComponent(v.slice(4))
+    : "&universe=" + encodeURIComponent(v);
+}
+
+function fillDataPickers(cached) {
+  for (const sel of [$("#rs-data"), $("#dk-universe")]) {
+    const keep = sel.value;
+    sel.querySelectorAll("optgroup").forEach(g => g.remove());
+    if (cached.length) {
+      const g = document.createElement("optgroup");
+      g.label = "cached prices";
+      for (const c of cached) {
+        const o = document.createElement("option");
+        o.value = "csv:" + c.file;
+        o.textContent = `${c.file} (${c.rows} bars)`;
+        g.appendChild(o);
+      }
+      sel.appendChild(g);
+    }
+    sel.value = keep;
+    if (!sel.value) sel.selectedIndex = 0;
+  }
+  syncSeed();
+}
+
+/* A seed only means something when the series is generated. */
+function syncSeed() {
+  const csv = $("#dk-universe").value.startsWith("csv:");
+  $("#dk-seed").disabled = csv;
+  $("#dk-seed").closest(".field").style.opacity = csv ? 0.45 : 1;
+}
+
 async function loadCache() {
   let d;
   try { d = await (await fetch("/api/data")).json(); } catch { return; }
+  fillDataPickers(d.cached);
 
   $("#dc-key").textContent = d.coingecko_key
     ? `CoinGecko key set (${d.coingecko_plan})`
@@ -886,6 +933,8 @@ function renderScreen(job) {
 }
 
 /* ---- desk ---- */
+$("#dk-universe").addEventListener("change", syncSeed);
+
 $("#dk-run").addEventListener("click", async () => {
   const btn = $("#dk-run"), out = $("#dk-out");
   btn.disabled = true;
@@ -894,7 +943,7 @@ $("#dk-run").addEventListener("click", async () => {
   let d;
   try {
     d = await (await fetch(`/api/desk?strategy=${encodeURIComponent($("#dk-strategy").value)}`
-      + `&universe=${$("#dk-universe").value}&seed=${$("#dk-seed").value}`)).json();
+      + dataQuery($("#dk-universe")) + `&seed=${$("#dk-seed").value}`)).json();
   } catch {
     out.innerHTML = `<div class="alert bad">${icon("i-alert")}<div>Request failed.</div></div>`;
     btn.disabled = false; return;
@@ -931,7 +980,8 @@ $("#an-run").addEventListener("click", async () => {
 
   let a;
   try {
-    a = await (await fetch("/api/analyze?strategy=" + encodeURIComponent($("#strategy").value))).json();
+    a = await (await fetch("/api/analyze?strategy=" + encodeURIComponent($("#strategy").value)
+      + dataQuery($("#rs-data")))).json();
   } catch {
     out.innerHTML = `<div class="alert bad">${icon("i-alert")}<div>Request failed.</div></div>`;
     btn.disabled = false; return;

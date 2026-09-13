@@ -397,6 +397,58 @@ def api_screen_status(job_id):
 
 # -------------------------------------------------------------------- desk
 # ---------------------------------------------------------------- data
+def _cached_series(name):
+    """Resolve a cached CSV by name, or raise ValueError with a safe message.
+
+    One check for every endpoint that takes a file: the browser must never be
+    able to read outside the project, and an error must describe what to fix
+    rather than the filesystem it found.
+    """
+    safe = (Path("data") / Path(name).name).resolve()
+    if not safe.is_relative_to(Path("data").resolve()) or not safe.exists():
+        raise ValueError("that dataset is not in the cache — fetch it on the Data tab first")
+    try:
+        return data.load_csv(safe)["close"], safe.name
+    except pd.errors.ParserError as exc:
+        # ParserError subclasses ValueError, so it must be caught first or the
+        # handler below returns pandas' internals to the browser verbatim.
+        app.logger.warning("unparseable cached CSV %s: %s", safe, exc)
+        raise ValueError(f"{safe.name} is not readable as OHLCV data") from exc
+    except ValueError as exc:
+        app.logger.warning("rejected cached CSV %s: %s", safe, exc)
+        raise ValueError(f"{safe.name} needs a date column and a close column") from exc
+
+
+GENERATORS = {
+    "synthetic": (data.synthetic, "synthetic"),
+    "regimes": (data.synthetic_regimes, "regimes"),
+}
+
+
+def _requested_series(args):
+    """Resolve whatever data the caller asked for, and say what it turned out to be.
+
+    Every endpoint that takes prices goes through here, so `csv=` and
+    `universe=` mean the same thing everywhere and an unknown universe is
+    refused rather than quietly served as synthetic. The returned label names
+    the configuration the numbers describe.
+    """
+    csv_name = args.get("csv")
+    if csv_name:
+        return _cached_series(csv_name)
+
+    universe = args.get("universe", "synthetic")
+    if universe not in GENERATORS:
+        raise ValueError(f"unknown data source {universe!r}")
+    try:
+        seed = int(args.get("seed", 0))
+    except (TypeError, ValueError):
+        raise ValueError("seed must be a whole number") from None
+
+    generate, name = GENERATORS[universe]
+    return generate(seed=seed)["close"], f"{name} (seed {seed})"
+
+
 @app.route("/api/data")
 @require_auth
 def api_data_status():
@@ -468,20 +520,19 @@ def api_desk():
     strategy = request.args.get("strategy", "breakout")
     if strategy not in REGISTRY:
         return jsonify({"error": f"unknown strategy {strategy}"}), 400
-    seed = int(request.args.get("seed", 0))
-    universe = request.args.get("universe", "synthetic")
+    try:
+        close, label = _requested_series(request.args)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
 
-    close = (data.synthetic_regimes(seed=seed) if universe == "regimes"
-             else data.synthetic(seed=seed))["close"]
-
-    proposal = Proposal(symbol=request.args.get("symbol", "SYNTH"),
+    proposal = Proposal(symbol=request.args.get("symbol") or label,
                         strategy=strategy, close=close)
     decision = Desk().evaluate(proposal)
     evidence = proposal.evidence
 
     return jsonify({
         "approved": decision.approved,
-        "dataset": f"{universe} (seed {seed})",
+        "dataset": label,
         "params": proposal.params,
         "position": proposal.target_position,
         "verdicts": [{"agent": v.agent, "approved": v.approved, "reason": v.reason}
@@ -500,9 +551,11 @@ def api_analyze():
     strategy = request.args.get("strategy", "sma_cross")
     if strategy not in REGISTRY:
         return jsonify({"error": f"unknown strategy {strategy}"}), 400
-    seed = int(request.args.get("seed", 0))
+    try:
+        close, label = _requested_series(request.args)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
 
-    close = data.synthetic(seed=seed)["close"]
     fn, grid = REGISTRY[strategy]
     try:
         _, folds, _, _ = walk_forward(close, fn, grid, n_folds=4)
@@ -516,7 +569,7 @@ def api_analyze():
     table = leverage_table(result["net_return"], levels=(1, 2, 3, 5), n_sims=3000)
 
     return jsonify({
-        "strategy": strategy, "params": params,
+        "strategy": strategy, "params": params, "dataset": label,
         "basis": "fitted out-of-sample on the last of 4 walk-forward folds",
         "round_trips": stats["round_trips_per_year"],
         "drag": stats["annual_cost_drag"],
@@ -540,23 +593,7 @@ def api_backtest():
 
     csv_path = request.args.get("csv")
     try:
-        if csv_path:
-            safe = Path(csv_path).resolve()
-            # Path containment check: the browser must not read arbitrary files.
-            if not safe.is_relative_to(Path.cwd()) or not safe.exists():
-                return jsonify({"error": "csv must be an existing file under the project directory"}), 400
-            try:
-                close, label = data.load_csv(safe)["close"], safe.name
-            except ValueError as exc:
-                # load_csv names the absolute path and quotes the columns it
-                # found, which reflects file contents and deployment layout back
-                # to the caller. Log that; return only what the user can act on.
-                app.logger.warning("rejected %s: %s", safe, exc)
-                return jsonify({"error": f"{safe.name} is not usable OHLCV data — "
-                                         "it needs a date column and a close column."}), 400
-        else:
-            seed = int(request.args.get("seed", 0))
-            close, label = data.synthetic(seed=seed)["close"], f"synthetic (seed {seed})"
+        close, label = _requested_series(request.args)
 
         fn, grid = REGISTRY[strategy]
         oos, folds, benchmark, n_trials = walk_forward(close, fn, grid, n_folds=5)
@@ -582,12 +619,6 @@ def api_backtest():
             "equity_curve": [round(v, 4) for v in equity.tolist()],
             "benchmark_curve": [round(v, 4) for v in (1 + benchmark).cumprod().tolist()],
         })
-    except (pd.errors.ParserError, UnicodeDecodeError):
-        # ParserError subclasses ValueError, so it must be caught first or the
-        # handler below returns pandas' internals to the browser verbatim.
-        app.logger.warning("unparseable CSV: %s", csv_path)
-        return jsonify({"error": "Could not parse that file as CSV. It needs a "
-                                 "date column and a close column."}), 400
     except (ValueError, FileNotFoundError) as exc:
         return jsonify({"error": str(exc)}), 400
     except Exception:

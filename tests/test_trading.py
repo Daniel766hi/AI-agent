@@ -765,6 +765,97 @@ def test_one_job_of_each_kind_runs_at_a_time():
     _await_job(client, first["job"])
 
 
+# --- one dataset resolver ----------------------------------------------------
+# Research, Desk and Cost & risk all take prices. They used to disagree about
+# what a request meant: /api/screen refused an unknown universe, /api/desk
+# quietly served synthetic instead, and /api/backtest ignored `universe`
+# altogether — so a typo returned a real-looking result for data nobody asked
+# for. These assert the three now answer identically.
+
+DATA_ENDPOINTS = ("/api/backtest", "/api/desk", "/api/analyze")
+
+
+def _cached_fixture(name="test_resolver.csv", seed=11, n=400):
+    """Write a well-formed OHLCV file into the cache the dashboard reads."""
+    from quant import data as qdata
+    Path("data").mkdir(exist_ok=True)
+    path = Path("data") / name
+    qdata.synthetic(seed=seed, n=n).reset_index(names="date").to_csv(path, index=False)
+    return path
+
+
+def test_every_endpoint_reads_a_cached_file():
+    client, _ = _client()
+    path = _cached_fixture()
+    try:
+        for endpoint in DATA_ENDPOINTS:
+            body = client.get(f"{endpoint}?strategy=sma_cross&csv={path.name}").get_json()
+            assert "error" not in body, f"{endpoint} rejected a valid cached file: {body}"
+            assert body["dataset"] == path.name, (
+                f"{endpoint} must name the file it used, said {body.get('dataset')!r}")
+    finally:
+        path.unlink(missing_ok=True)
+
+
+def test_unknown_universe_is_refused_not_quietly_swapped():
+    """Serving synthetic for a universe nobody named is a wrong answer, not a default."""
+    client, _ = _client()
+    for endpoint in DATA_ENDPOINTS:
+        response = client.get(f"{endpoint}?strategy=sma_cross&universe=nonsense")
+        assert response.status_code == 400, (
+            f"{endpoint} accepted an unknown universe: {response.get_json()}")
+
+
+def test_generated_series_name_their_seed():
+    """The numbers describe one configuration, so the response says which."""
+    client, _ = _client()
+    for endpoint in DATA_ENDPOINTS:
+        body = client.get(f"{endpoint}?strategy=sma_cross&universe=regimes&seed=3").get_json()
+        assert body.get("dataset") == "regimes (seed 3)", (
+            f"{endpoint} mislabelled its data as {body.get('dataset')!r}")
+
+
+def test_bad_input_is_refused_without_leaking_the_machine():
+    client, _ = _client()
+    bad = ["csv=/etc/passwd", "csv=../../etc/passwd", "csv=nothing_here.csv",
+           "universe=synthetic&seed=abc"]
+    for endpoint in DATA_ENDPOINTS:
+        for case in bad:
+            response = client.get(f"{endpoint}?strategy=sma_cross&{case}")
+            assert response.status_code == 400, f"{endpoint}?{case} was accepted"
+            message = response.get_json()["error"]
+            for leak in ("/home/", "/etc/", "Traceback", "pandas"):
+                assert leak not in message, f"{endpoint} leaked {leak!r}: {message}"
+
+
+def test_unreadable_cached_file_names_the_fix_not_the_parser():
+    client, _ = _client()
+    Path("data").mkdir(exist_ok=True)
+    path = Path("data") / "test_not_ohlcv.csv"
+    path.write_text("not,a,price\nfile,at,all\n")
+    try:
+        for endpoint in DATA_ENDPOINTS:
+            response = client.get(f"{endpoint}?strategy=sma_cross&csv={path.name}")
+            assert response.status_code == 400
+            message = response.get_json()["error"]
+            assert "date column" in message, f"{endpoint} said {message!r}"
+    finally:
+        path.unlink(missing_ok=True)
+
+
+def test_cached_files_are_listed_for_the_pickers():
+    """The Data tab's listing is what populates the Research and Desk pickers."""
+    client, _ = _client()
+    path = _cached_fixture(name="test_listed.csv")
+    try:
+        cached = client.get("/api/data").get_json()["cached"]
+        entry = next((c for c in cached if c["file"] == path.name), None)
+        assert entry is not None, "a cached file must appear in the listing"
+        assert entry["rows"] > 0, "the picker shows the bar count, so it must be real"
+    finally:
+        path.unlink(missing_ok=True)
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

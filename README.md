@@ -537,8 +537,9 @@ python web/app.py                          # prints an access token
 DASHBOARD_TOKEN=... python web/app.py      # stable token across restarts
 ```
 
-The whole system in the browser, as four views — **Live**, **Screen**,
-**Desk**, **Research** — top tabs on desktop, a bottom tab bar on mobile. Each
+The whole system in the browser, as five views — **Live**, **Data**,
+**Screen**, **Desk**, **Research** — top tabs on desktop, a bottom tab bar on
+mobile. Each
 is a real history entry, so the back button works and a view can be linked
 directly (`#screen`).
 
@@ -550,11 +551,18 @@ directly (`#screen`).
 | Desk | One proposal through all four agents, every mandate and verdict shown |
 | Research | Walk-forward validation, plus the cost hurdle and leverage ruin table |
 
+Screen, Desk and Research each carry a data picker listing the synthetic
+generators and every cached file, and they resolve that choice through one
+function — so a request means the same thing at each, an unknown source is
+refused rather than quietly served as synthetic, and every result names the
+data it describes. The Desk's seed control greys out for a cached file, where a
+seed means nothing.
+
 **Data** closes the loop: until it existed the browser could only work on
 synthetic series and CSVs put there from a terminal. It probes each source and
 reports what is actually wrong with the ones that fail — naming the host, not
-dumping a urllib3 traceback — then fetches symbols into the cache, where Screen
-and Research pick them up. Symbols are validated against what a ticker can
+dumping a urllib3 traceback — then fetches symbols into the cache, where every
+other view picks them up. Symbols are validated against what a ticker can
 contain before they reach a URL.
 
 Five tabs, which is exactly what a bottom bar holds; Costs and Trades are

@@ -35,7 +35,11 @@ asked:
 - **Numbers name the configuration they describe.** Cost drag, the hurdle,
   ruin and Kelly all move with the parameters. Never report them for a set
   nobody chose — fit out-of-sample or take the caller's, and say which on the
-  output.
+  output. The same holds for the data: every endpoint resolves `csv=` and
+  `universe=` through one function, returns the label with the result, and
+  refuses a source it does not know. Falling back to synthetic for a universe
+  nobody named returns a real-looking answer about data the caller never asked
+  for.
 - **Parallelism may change speed, never results.** Screening runs across
   processes; each asset is independent and each bootstrap seeded, so worker
   count cannot move a number. `tests/test_screen.py` asserts serial and
