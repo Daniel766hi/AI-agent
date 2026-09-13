@@ -138,7 +138,12 @@ significance. If your engine finds edge in noise, it has a leak.
 
 ```bash
 python analyze.py --csv data/BTCUSDT_1d.csv --strategy sma_cross
+python analyze.py --csv data/BTCUSDT_1d.csv --strategy sma_cross --params "fast=20,slow=100"
 ```
+
+Parameters default to the walk-forward fitted set and the header says so.
+Cost drag, the hurdle, ruin and Kelly all move with them, so a figure is only
+meaningful once you know which configuration it describes.
 
 No backtest answers the questions that decide most outcomes, so `analyze.py`
 does. None of it predicts returns — it is arithmetic on the parts you control.

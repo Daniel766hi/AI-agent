@@ -32,6 +32,10 @@ asked:
   no scoring or weighting. Never add a majority vote, a confidence weight, or an
   override — the whole point is that optimism cannot outvote risk. An agent that
   raises has not approved.
+- **Numbers name the configuration they describe.** Cost drag, the hurdle,
+  ruin and Kelly all move with the parameters. Never report them for a set
+  nobody chose — fit out-of-sample or take the caller's, and say which on the
+  output.
 - **Deflation for search.** Any p-value must be charged for every configuration
   tried — and in a screen, for every asset too (`assets x configs`). A raw
   p-value next to a searched grid is a lie.

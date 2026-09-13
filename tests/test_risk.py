@@ -154,6 +154,57 @@ def test_bootstrap_cannot_exceed_its_worst_observed_day():
         "a crash in the history must raise estimated ruin risk"
 
 
+
+# --- analyze.py parameter basis ---------------------------------------------
+
+def _run_analyze(*args):
+    import subprocess
+    import sys as _sys
+    root = Path(__file__).resolve().parent.parent
+    proc = subprocess.run([_sys.executable, "analyze.py", *args],
+                          capture_output=True, text=True, cwd=root, timeout=600)
+    return proc.returncode, proc.stdout
+
+
+def test_analyze_states_where_its_parameters_came_from():
+    """Every figure it prints depends on the parameters; the basis must be visible.
+
+    It used to take the middle of each grid, which is a configuration nobody
+    chose and nothing validated — real numbers describing an arbitrary strategy.
+    """
+    code, out = _run_analyze("--synthetic", "--strategy", "sma_cross")
+    assert code == 0, out
+    assert "parameters fitted out-of-sample" in out, \
+        f"the default basis must be stated, got:\n{out[:400]}"
+
+
+def test_analyze_honours_pinned_parameters():
+    code, out = _run_analyze("--synthetic", "--strategy", "sma_cross",
+                             "--params", "fast=10,slow=200")
+    assert code == 0, out
+    assert "'fast': 10" in out and "'slow': 200" in out, \
+        f"pinned parameters must be the ones used, got:\n{out[:400]}"
+    assert "pinned by you" in out
+
+
+def test_analyze_default_parameters_are_walk_forward_fitted():
+    """The defaults must match what walk_forward actually chose, not a guess."""
+    from quant import data as qdata
+    from quant.strategies import REGISTRY
+    from quant.validate import walk_forward
+
+    close = qdata.synthetic(seed=0)["close"]
+    fn, grid = REGISTRY["sma_cross"]
+    _, folds, _, _ = walk_forward(close, fn, grid, n_folds=4)
+    expected = folds.iloc[-1]["params"]
+
+    code, out = _run_analyze("--synthetic", "--strategy", "sma_cross")
+    assert code == 0, out
+    for key, value in expected.items():
+        assert f"'{key}': {value}" in out, \
+            f"expected fitted {key}={value} in the header, got:\n{out[:300]}"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

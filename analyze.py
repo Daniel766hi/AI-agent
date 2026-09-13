@@ -10,11 +10,23 @@ Answers three questions no backtest answers on its own:
   3. What is the chance this ruins me at a given position size?
 """
 import argparse
+import sys
 
 from quant import data
 from quant.backtest import DEFAULT_FEE_BPS, DEFAULT_SLIPPAGE_BPS, backtest, buy_and_hold, metrics
 from quant.risk import breakeven, cost_drag, kelly_fraction, leverage_table
 from quant.strategies import REGISTRY
+from quant.validate import walk_forward
+
+
+def _parse_params(text):
+    """'fast=20,slow=100' -> {'fast': 20, 'slow': 100}, ints where they are ints."""
+    out = {}
+    for pair in filter(None, (p.strip() for p in text.split(","))):
+        key, _, value = pair.partition("=")
+        value = value.strip()
+        out[key.strip()] = int(value) if value.lstrip("-").isdigit() else float(value)
+    return out
 
 
 def main():
@@ -27,6 +39,8 @@ def main():
     ap.add_argument("--fee-bps", type=float, default=DEFAULT_FEE_BPS)
     ap.add_argument("--slippage-bps", type=float, default=DEFAULT_SLIPPAGE_BPS)
     ap.add_argument("--periods-per-year", type=int, default=365)
+    ap.add_argument("--params", default="", help="pin parameters, e.g. 'fast=20,slow=100'")
+    ap.add_argument("--folds", type=int, default=4, help="folds used to fit parameters")
     args = ap.parse_args()
 
     if args.csv:
@@ -35,13 +49,30 @@ def main():
         close, label = data.synthetic(seed=0)["close"], "synthetic GBM"
 
     fn, grid = REGISTRY[args.strategy]
-    params = {k: v[len(v) // 2] for k, v in grid.items()}
+
+    # Which parameters these numbers describe matters: cost drag, the hurdle,
+    # ruin and Kelly all move with them. Taking the middle of each grid — as
+    # this did — reports real figures for a configuration nobody chose and
+    # nothing validated, which reads like a verdict on the strategy and is not.
+    if args.params:
+        params = _parse_params(args.params)
+        basis = "pinned by you"
+    else:
+        try:
+            _, folds, _, _ = walk_forward(close, fn, grid, n_folds=args.folds)
+            params = folds.iloc[-1]["params"]
+            basis = f"fitted out-of-sample on the last of {args.folds} walk-forward folds"
+        except ValueError as exc:
+            sys.exit(f"Not enough history to fit parameters ({exc}). "
+                     f"Pass --params explicitly, e.g. --params 'fast=20,slow=100'.")
+
     result = backtest(close, fn(close, **params), args.fee_bps, args.slippage_bps, args.periods_per_year)
     stats = breakeven(result, args.periods_per_year, args.fee_bps, args.slippage_bps)
     strat_m = metrics(result["net_return"], args.periods_per_year)
     hold_m = metrics(buy_and_hold(close, args.periods_per_year)["net_return"], args.periods_per_year)
 
-    print(f"\n{'=' * 68}\n  {args.strategy} {params}  on  {label}\n{'=' * 68}")
+    print(f"\n{'=' * 68}\n  {args.strategy} {params}  on  {label}")
+    print(f"  parameters {basis}\n{'=' * 68}")
 
     print(f"\n1. THE HURDLE  — what it must clear before it earns anything")
     print(f"   Round trips per year     {stats['round_trips_per_year']:>10.1f}")
