@@ -2,6 +2,7 @@
 import os
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -194,25 +195,6 @@ def test_screen_deflation_charges_for_every_asset():
     assert fifty_assets > 0.90, fifty_assets
     assert fifty_assets > one_asset, "screening more assets must cost significance"
 
-
-
-def test_dashboard_serves_app_shell():
-    """The shell must ship all four views and both navs in the initial HTML."""
-    os.environ["DASHBOARD_TOKEN"] = "test-token-value"
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "web"))
-    import importlib
-    import app as dashboard
-    importlib.reload(dashboard)
-
-    client = dashboard.app.test_client()
-    client.post("/login", data={"token": "test-token-value"})
-    html = client.get("/").get_data(as_text=True)
-
-    for view in ("overview", "costs", "validation", "trades"):
-        assert f'id="view-{view}"' in html, f"missing view: {view}"
-        assert f'data-view="{view}"' in html, f"missing tab: {view}"
-    assert html.count('role="tablist"') == 2, "needs both desktop tabs and mobile tab bar"
-    assert 'href="#i-' in html, "icons must be inline SVG symbols, not emoji"
 
 
 def test_dashboard_has_no_emoji_icons():
@@ -536,6 +518,98 @@ def test_no_cache_mode_writes_nothing():
         frame = qdata.fetch_yahoo("TEST.JK", cache_dir=None)
         assert len(frame) == 3
         assert not list(Path(tmp).iterdir()), "nothing should have been written"
+
+
+
+# --- the whole system in the browser ----------------------------------------
+
+def test_dashboard_serves_all_four_views():
+    """Live, Screen, Desk, Research — and both navs, within the 5-tab limit."""
+    client, _ = _client()
+    html = client.get("/").get_data(as_text=True)
+    for view in ("live", "screen", "desk", "research"):
+        assert f'id="view-{view}"' in html, f"missing view: {view}"
+        assert f'data-view="{view}"' in html, f"missing tab: {view}"
+    assert html.count('role="tablist"') == 2
+    tabs = html.count('class="tab" role="tab"')
+    assert tabs <= 5, f"{tabs} top-level tabs exceeds the bottom-bar limit"
+
+
+def test_desk_endpoint_returns_every_verdict():
+    """Not just the outcome — the reasons are the point of the desk."""
+    client, _ = _client()
+    body = client.get("/api/desk?strategy=ts_momentum&universe=regimes&seed=2").get_json()
+    assert "approved" in body
+    agents = {v["agent"] for v in body["verdicts"]}
+    assert agents == {"research", "skeptic", "cost", "risk"}, agents
+    for verdict in body["verdicts"]:
+        assert verdict["reason"], f"{verdict['agent']} gave no reason"
+        assert body["mandates"][verdict["agent"]], "every agent must state a mandate"
+    assert 0.0 <= body["position"] <= 1.0
+
+
+def test_desk_endpoint_rejects_unknown_strategy():
+    client, _ = _client()
+    assert client.get("/api/desk?strategy=nonsense").status_code == 400
+
+
+def test_screen_runs_as_a_job_and_reports_both_p_values():
+    """A real screen outlives a request, so it runs in a thread and is polled."""
+    client, _ = _client()
+    started = client.post("/api/screen", json={"strategy": "breakout",
+                                               "universe": "synthetic", "count": 12}).get_json()
+    assert "job" in started, started
+
+    for _ in range(120):
+        job = client.get(f"/api/screen/{started['job']}").get_json()
+        if job["stage"] in ("done", "failed"):
+            break
+        time.sleep(0.25)
+
+    assert job["stage"] == "done", job.get("error")
+    assert len(job["rows"]) == 12
+    assert job["total_trials"] == 12 * job["n_combos"], "trials must be assets x configs"
+    for row in job["rows"]:
+        assert row["p_honest"] >= row["p_naive"], \
+            "the whole-screen p-value can never be kinder than the per-asset one"
+
+
+def test_screen_job_ids_are_unguessable_and_scoped():
+    client, _ = _client()
+    assert client.get("/api/screen/does-not-exist").status_code == 404
+    started = client.post("/api/screen", json={"universe": "synthetic", "count": 8}).get_json()
+    assert len(started["job"]) >= 8, "a job id must not be enumerable"
+
+
+def test_screen_rejects_unknown_strategy_before_starting_work():
+    client, _ = _client()
+    assert client.post("/api/screen", json={"strategy": "nope"}).status_code == 400
+
+
+def test_analyze_endpoint_states_its_parameter_basis():
+    client, _ = _client()
+    body = client.get("/api/analyze?strategy=sma_cross").get_json()
+    assert "fitted out-of-sample" in body["basis"]
+    assert body["params"], "must name the parameters the figures describe"
+    assert len(body["leverage"]) == 4
+    assert body["leverage"][0]["leverage"] == 1
+    ruin = [row["p_wiped_out"] for row in body["leverage"]]
+    assert ruin == sorted(ruin), "wipeout risk must rise with leverage"
+
+
+def test_new_endpoints_require_auth():
+    """Every addition must be behind the same gate as everything else."""
+    os.environ["DASHBOARD_TOKEN"] = "test-token-value"
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "web"))
+    import importlib
+    import app as dashboard
+    importlib.reload(dashboard)
+    anonymous = dashboard.app.test_client()
+
+    assert anonymous.get("/api/desk").status_code == 401
+    assert anonymous.get("/api/analyze").status_code == 401
+    assert anonymous.post("/api/screen", json={}).status_code == 401
+    assert anonymous.get("/api/screen/anything").status_code == 401
 
 
 if __name__ == "__main__":

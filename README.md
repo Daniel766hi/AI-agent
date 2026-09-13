@@ -523,10 +523,25 @@ python web/app.py                          # prints an access token
 DASHBOARD_TOKEN=... python web/app.py      # stable token across restarts
 ```
 
-An app shell with four views — Overview, Costs, Validation, Trades — as top
-tabs on desktop and a bottom tab bar on mobile. Each view is a real history
-entry, so the browser back button works and a view can be linked directly
-(`#costs`). Polls every 15s, with a live/stale/stopped indicator in the bar.
+The whole system in the browser, as four views — **Live**, **Screen**,
+**Desk**, **Research** — top tabs on desktop, a bottom tab bar on mobile. Each
+is a real history entry, so the back button works and a view can be linked
+directly (`#screen`).
+
+| View | What it does |
+|---|---|
+| Live | Position, equity, drawdown, trading costs, recent fills. Polls every 15s. |
+| Screen | Many assets at once, with the per-asset and whole-screen p-values side by side |
+| Desk | One proposal through all four agents, every mandate and verdict shown |
+| Research | Walk-forward validation, plus the cost hurdle and leverage ruin table |
+
+Four tabs rather than seven because a bottom bar holds five at most; Costs and
+Trades are sections of Live, and Validation and Analysis are both Research.
+
+A screen over real coins is minutes of network, well past any request timeout,
+so it runs as a background job the page polls — stage and elapsed time while it
+works, results when it finishes. A hundred synthetic assets complete in about
+three and a half seconds.
 
 Built to the app-UI rules: SVG icons rather than emoji, 44px minimum touch
 targets, visible keyboard focus, `prefers-reduced-motion` honoured, and every

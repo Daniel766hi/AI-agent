@@ -12,6 +12,7 @@ import hmac
 import os
 import secrets
 import sys
+import threading
 import time
 from functools import wraps
 from pathlib import Path
@@ -24,7 +25,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from quant import data                                                    # noqa: E402
 from quant.backtest import buy_and_hold, metrics                          # noqa: E402
 from quant.live import read_state                                         # noqa: E402
-from quant.risk import cost_drag, live_cost_report                        # noqa: E402
+from quant.agents import Desk, Proposal                                   # noqa: E402
+from quant.risk import (breakeven, cost_drag, kelly_fraction,             # noqa: E402
+                        leverage_table, live_cost_report)
+from quant.backtest import backtest                                       # noqa: E402
 from quant.strategies import REGISTRY                                     # noqa: E402
 from quant.validate import block_bootstrap_pvalue, deflate, walk_forward  # noqa: E402
 
@@ -152,6 +156,174 @@ def api_costs():
             {"label": "daily", "round_trips": 250, "drag": cost_drag(250)},
         ],
         "pace_drag": cost_drag(pace) if pace else None,
+    })
+
+
+# ---------------------------------------------------------------- screening
+# A screen over real coins is minutes of network, far past any request timeout,
+# so it runs in a thread and the page polls. One process, one user: a dict is
+# the right registry, not a queue.
+_JOBS = {}
+_JOBS_LOCK = threading.Lock()
+MAX_JOBS_KEPT = 8
+
+
+def _run_screen(job_id, strategy, universe, count, folds):
+    from screen import evaluate_all
+
+    def note(**fields):
+        with _JOBS_LOCK:
+            _JOBS[job_id].update(fields)
+
+    try:
+        note(stage="loading")
+        if universe == "synthetic":
+            assets = [(f"noise_{i:03d}", data.synthetic(n=1200, seed=5000 + i)["close"])
+                      for i in range(count)]
+        elif universe == "cached":
+            paths = sorted(Path("data").glob("*.csv"))
+            assets = []
+            for path in paths[:count]:
+                try:
+                    assets.append((path.stem, data.load_csv(path)["close"]))
+                except ValueError:
+                    continue          # a non-OHLCV CSV in data/ is not an error
+        else:
+            note(stage="failed", error=f"unknown universe {universe!r}")
+            return
+
+        if not assets:
+            note(stage="failed",
+                 error="No usable assets. For 'cached', fetch some first: python datacheck.py --save")
+            return
+
+        note(stage="evaluating", total=len(assets))
+        outcomes = evaluate_all(assets, strategy, folds=folds)
+        rows = [o for o in outcomes if o["ok"]]
+        if not rows:
+            note(stage="failed", error="No asset had enough history to validate.")
+            return
+
+        n_combos = rows[0]["n_combos"]
+        total_trials = len(rows) * n_combos
+        for row in rows:
+            row["p_naive"] = deflate(row["p_raw"], n_combos)
+            row["p_honest"] = deflate(row["p_raw"], total_trials)
+        rows.sort(key=lambda r: r["p_raw"])
+
+        note(stage="done", rows=rows, n_combos=n_combos, total_trials=total_trials,
+             skipped=[{"asset": o["asset"], "error": o["error"]}
+                      for o in outcomes if not o["ok"]],
+             naive_hits=sum(r["p_naive"] < 0.05 for r in rows),
+             honest_hits=sum(r["p_honest"] < 0.05 for r in rows))
+    except Exception as exc:
+        app.logger.exception("screen job failed")
+        note(stage="failed", error=f"{type(exc).__name__}: {exc}")
+
+
+@app.route("/api/screen", methods=["POST"])
+@require_auth
+def api_screen_start():
+    payload = request.get_json(silent=True) or {}
+    strategy = payload.get("strategy", "breakout")
+    if strategy not in REGISTRY:
+        return jsonify({"error": f"unknown strategy {strategy}"}), 400
+
+    universe = payload.get("universe", "synthetic")
+    count = max(2, min(int(payload.get("count", 40)), 300))
+    folds = max(2, min(int(payload.get("folds", 4)), 8))
+
+    job_id = secrets.token_urlsafe(8)
+    with _JOBS_LOCK:
+        for stale in sorted(_JOBS, key=lambda j: _JOBS[j]["started"])[:-MAX_JOBS_KEPT]:
+            _JOBS.pop(stale, None)
+        _JOBS[job_id] = {"stage": "queued", "started": time.time(),
+                         "strategy": strategy, "universe": universe, "requested": count}
+
+    threading.Thread(target=_run_screen, args=(job_id, strategy, universe, count, folds),
+                     daemon=True).start()
+    return jsonify({"job": job_id})
+
+
+@app.route("/api/screen/<job_id>")
+@require_auth
+def api_screen_status(job_id):
+    with _JOBS_LOCK:
+        job = _JOBS.get(job_id)
+        if job is None:
+            return jsonify({"error": "no such job"}), 404
+        snapshot = dict(job)
+    snapshot["elapsed"] = round(time.time() - snapshot["started"], 1)
+    return jsonify(snapshot)
+
+
+# -------------------------------------------------------------------- desk
+@app.route("/api/desk")
+@require_auth
+def api_desk():
+    """Put one proposal to the agents and return every verdict, not just the outcome."""
+    strategy = request.args.get("strategy", "breakout")
+    if strategy not in REGISTRY:
+        return jsonify({"error": f"unknown strategy {strategy}"}), 400
+    seed = int(request.args.get("seed", 0))
+    universe = request.args.get("universe", "synthetic")
+
+    close = (data.synthetic_regimes(seed=seed) if universe == "regimes"
+             else data.synthetic(seed=seed))["close"]
+
+    proposal = Proposal(symbol=request.args.get("symbol", "SYNTH"),
+                        strategy=strategy, close=close)
+    decision = Desk().evaluate(proposal)
+    evidence = proposal.evidence
+
+    return jsonify({
+        "approved": decision.approved,
+        "dataset": f"{universe} (seed {seed})",
+        "params": proposal.params,
+        "position": proposal.target_position,
+        "verdicts": [{"agent": v.agent, "approved": v.approved, "reason": v.reason}
+                     for v in decision.verdicts],
+        "mandates": {a.name: a.mandate for a in Desk().agents},
+        "p_deflated": evidence.get("p_deflated"),
+        "n_trials": evidence.get("n_trials"),
+    })
+
+
+# ----------------------------------------------------------------- analysis
+@app.route("/api/analyze")
+@require_auth
+def api_analyze():
+    """Cost hurdle, leverage ruin and Kelly for a walk-forward fitted strategy."""
+    strategy = request.args.get("strategy", "sma_cross")
+    if strategy not in REGISTRY:
+        return jsonify({"error": f"unknown strategy {strategy}"}), 400
+    seed = int(request.args.get("seed", 0))
+
+    close = data.synthetic(seed=seed)["close"]
+    fn, grid = REGISTRY[strategy]
+    try:
+        _, folds, _, _ = walk_forward(close, fn, grid, n_folds=4)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    params = folds.iloc[-1]["params"]
+    result = backtest(close, fn(close, **params))
+    stats = breakeven(result)
+    kelly = kelly_fraction(result["net_return"])
+    table = leverage_table(result["net_return"], levels=(1, 2, 3, 5), n_sims=3000)
+
+    return jsonify({
+        "strategy": strategy, "params": params,
+        "basis": "fitted out-of-sample on the last of 4 walk-forward folds",
+        "round_trips": stats["round_trips_per_year"],
+        "drag": stats["annual_cost_drag"],
+        "time_in_market": stats["time_in_market"],
+        "hurdle": stats["hurdle_vs_holding"],
+        "kelly": kelly["kelly"], "half_kelly": kelly["half_kelly"],
+        "annual_edge": kelly["annual_edge"],
+        "reference": [{"label": l, "round_trips": n, "drag": cost_drag(n)}
+                      for l, n in (("monthly", 12), ("weekly", 52), ("daily", 250), ("4x daily", 1000))],
+        "leverage": table.to_dict("records"),
     })
 
 

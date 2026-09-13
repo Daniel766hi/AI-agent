@@ -242,9 +242,11 @@
     transition: background .18s var(--ease), border-color .18s var(--ease), opacity .18s var(--ease);
   }
   select:hover, .btn:hover { border-color: var(--border-hi); background: var(--surface-2); }
+  /* Layout belongs on .btn: a secondary button has an icon too, and without
+     this it renders jammed against its label. */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--s2); }
   .btn.primary {
     background: var(--good); border-color: var(--good); color: #04120A; font-weight: 600;
-    display: inline-flex; align-items: center; gap: var(--s2);
   }
   .btn.primary:hover { background: #2BD46A; border-color: #2BD46A; }
   .btn[disabled] { opacity: .5; cursor: not-allowed; }
@@ -260,6 +262,38 @@
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
   }
+
+  /* ---------- verdict rows (desk) ---------- */
+  .verdict { display:flex; gap: var(--s3); align-items: flex-start;
+    padding: var(--s3) var(--s4); border-bottom: 1px solid rgba(38,49,73,.5); }
+  .verdict:last-child { border-bottom: none; }
+  .chip {
+    font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: .08em;
+    padding: 3px 7px; border-radius: 4px; flex: none; margin-top: 1px; min-width: 46px;
+    text-align: center;
+  }
+  .chip.pass { background: var(--good-bg); color: var(--good); border: 1px solid rgba(34,197,94,.3); }
+  .chip.veto { background: var(--bad-bg);  color: var(--bad);  border: 1px solid rgba(239,68,68,.35); }
+  .verdict-body { min-width: 0; }
+  .verdict-agent { font-weight: 600; font-size: 13px; }
+  .verdict-mandate { font-size: 11.5px; color: var(--fg-dim); margin-top: 1px; }
+  .verdict-reason { font-size: 13px; color: var(--fg-muted); margin-top: 5px; line-height: 1.45; }
+
+  /* ---------- progress ---------- */
+  .progress { height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+  .progress > span { display: block; height: 100%; background: var(--good); width: 30%;
+    animation: slide 1.1s ease-in-out infinite; }
+  @keyframes slide { 0% { margin-left: -30%; } 100% { margin-left: 100%; } }
+
+  .meter { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+  .meter > span { display: block; height: 100%; border-radius: 3px; }
+
+  .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .field label { font-size: 11px; font-weight: 500; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--fg-dim); }
+  .controls { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: flex-end; }
+  .controls .field { flex: 1 1 130px; }
+  .controls .btn { flex: 0 0 auto; }
 </style>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
@@ -271,6 +305,9 @@
   <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><circle cx="12" cy="12" r="9"/></symbol>
   <symbol id="i-out" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></symbol>
   <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 3 14 9-14 9V3z"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+  <symbol id="i-gavel" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14 13-7.5 7.5a2.12 2.12 0 0 1-3-3L11 10"/><path d="m16 16 6-6"/><path d="m8 8 6-6"/><path d="m9 7 8 8"/><path d="m7 9 8 8"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
 </defs></svg>
 
 <header class="appbar">
@@ -282,40 +319,25 @@
 </header>
 
 <nav class="tabs" role="tablist" aria-label="Sections">
-  <button class="tab" role="tab" data-view="overview"   aria-selected="true"  type="button"><svg aria-hidden="true"><use href="#i-pulse"/></svg>Overview</button>
-  <button class="tab" role="tab" data-view="costs"      aria-selected="false" type="button"><svg aria-hidden="true"><use href="#i-coins"/></svg>Costs</button>
-  <button class="tab" role="tab" data-view="validation" aria-selected="false" type="button"><svg aria-hidden="true"><use href="#i-beaker"/></svg>Validation</button>
-  <button class="tab" role="tab" data-view="trades"     aria-selected="false" type="button"><svg aria-hidden="true"><use href="#i-list"/></svg>Trades</button>
+  <button class="tab" role="tab" data-view="live"     aria-selected="true"  type="button"><svg aria-hidden="true"><use href="#i-pulse"/></svg>Live</button>
+  <button class="tab" role="tab" data-view="screen"   aria-selected="false" type="button"><svg aria-hidden="true"><use href="#i-grid"/></svg>Screen</button>
+  <button class="tab" role="tab" data-view="desk"     aria-selected="false" type="button"><svg aria-hidden="true"><use href="#i-gavel"/></svg>Desk</button>
+  <button class="tab" role="tab" data-view="research" aria-selected="false" type="button"><svg aria-hidden="true"><use href="#i-beaker"/></svg>Research</button>
 </nav>
 
 <main>
-  <section class="view" id="view-overview" role="tabpanel" aria-label="Overview">
+  <!-- ============================ LIVE ============================ -->
+  <section class="view" id="view-live" role="tabpanel" aria-label="Live">
     <div id="banners"></div>
     <div class="grid" id="tiles">
       <div class="stat hero"><div class="k">Equity</div><div class="v skel" style="height:30px">&nbsp;</div></div>
       <div class="stat"><div class="k">Position</div><div class="v skel" style="height:21px">&nbsp;</div></div>
       <div class="stat"><div class="k">Price</div><div class="v skel" style="height:21px">&nbsp;</div></div>
     </div>
-    <p class="foot" id="overview-foot"></p>
-  </section>
+    <p class="foot" id="live-foot"></p>
 
-  <section class="view" id="view-costs" role="tabpanel" aria-label="Costs" hidden>
     <div id="costs"></div>
-  </section>
 
-  <section class="view" id="view-validation" role="tabpanel" aria-label="Validation" hidden>
-    <div class="section">
-      <h2>Walk-forward validation</h2>
-      <div class="controls">
-        <label for="strategy" class="dim" style="font-size:13px">Strategy</label>
-        <select id="strategy">{% for s in strategies %}<option value="{{ s }}">{{ s }}</option>{% endfor %}</select>
-        <button class="btn primary" id="run" type="button"><svg aria-hidden="true"><use href="#i-play"/></svg>Run</button>
-      </div>
-      <div id="result"></div>
-    </div>
-  </section>
-
-  <section class="view" id="view-trades" role="tabpanel" aria-label="Trades" hidden>
     <div class="section">
       <h2>Recent trades</h2>
       <div class="panel"><div class="scroll"><table id="trades">
@@ -324,17 +346,100 @@
       </table></div></div>
     </div>
   </section>
+
+  <!-- =========================== SCREEN =========================== -->
+  <section class="view" id="view-screen" role="tabpanel" aria-label="Screen" hidden>
+    <div class="section">
+      <h2>Screen many assets</h2>
+      <div class="panel"><div class="panel-body">
+        <div class="controls">
+          <div class="field">
+            <label for="sc-strategy">Strategy</label>
+            <select id="sc-strategy">{% for s in strategies %}<option value="{{ s }}">{{ s }}</option>{% endfor %}</select>
+          </div>
+          <div class="field">
+            <label for="sc-universe">Universe</label>
+            <select id="sc-universe">
+              <option value="synthetic">synthetic (the null)</option>
+              <option value="cached">cached CSVs in data/</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="sc-count">Assets</label>
+            <select id="sc-count">
+              <option>20</option><option selected>40</option><option>100</option><option>200</option>
+            </select>
+          </div>
+          <button class="btn primary" id="sc-run" type="button"><svg aria-hidden="true"><use href="#i-play"/></svg>Run screen</button>
+        </div>
+        <p class="foot">Screening N assets with K configs is N&times;K trials, and at that many
+        attempts something always looks brilliant. Both p-values are shown: per-asset, and
+        charged for the whole screen. Run the synthetic universe at your real screen size
+        to see what your setup produces from noise alone.</p>
+      </div></div>
+      <div id="sc-out"></div>
+    </div>
+  </section>
+
+  <!-- ============================ DESK ============================ -->
+  <section class="view" id="view-desk" role="tabpanel" aria-label="Desk" hidden>
+    <div class="section">
+      <h2>Put a proposal to the desk</h2>
+      <div class="panel"><div class="panel-body">
+        <div class="controls">
+          <div class="field">
+            <label for="dk-strategy">Strategy</label>
+            <select id="dk-strategy">{% for s in strategies %}<option value="{{ s }}">{{ s }}</option>{% endfor %}</select>
+          </div>
+          <div class="field">
+            <label for="dk-universe">Data</label>
+            <select id="dk-universe">
+              <option value="synthetic">synthetic (no structure)</option>
+              <option value="regimes">regimes (real structure)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="dk-seed">Seed</label>
+            <select id="dk-seed"><option>0</option><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option></select>
+          </div>
+          <button class="btn primary" id="dk-run" type="button"><svg aria-hidden="true"><use href="#i-gavel"/></svg>Convene</button>
+        </div>
+        <p class="foot">Four agents, one mandate each. Approval is unanimous and a veto is
+        final &mdash; no scoring, no majority. The agent that proposes the trade cannot approve it.</p>
+      </div></div>
+      <div id="dk-out"></div>
+    </div>
+  </section>
+
+  <!-- ========================== RESEARCH ========================== -->
+  <section class="view" id="view-research" role="tabpanel" aria-label="Research" hidden>
+    <div class="section">
+      <h2>One strategy, one asset</h2>
+      <div class="panel"><div class="panel-body">
+        <div class="controls">
+          <div class="field">
+            <label for="strategy">Strategy</label>
+            <select id="strategy">{% for s in strategies %}<option value="{{ s }}">{{ s }}</option>{% endfor %}</select>
+          </div>
+          <button class="btn primary" id="run" type="button"><svg aria-hidden="true"><use href="#i-play"/></svg>Validate</button>
+          <button class="btn" id="an-run" type="button"><svg aria-hidden="true"><use href="#i-shield"/></svg>Cost &amp; risk</button>
+        </div>
+      </div></div>
+      <div id="result"></div>
+      <div id="an-out"></div>
+    </div>
+  </section>
 </main>
 
 <nav class="tabbar" role="tablist" aria-label="Sections">
-  <button role="tab" data-view="overview"   aria-selected="true"  type="button"><svg aria-hidden="true"><use href="#i-pulse"/></svg>Overview</button>
-  <button role="tab" data-view="costs"      aria-selected="false" type="button"><svg aria-hidden="true"><use href="#i-coins"/></svg>Costs</button>
-  <button role="tab" data-view="validation" aria-selected="false" type="button"><svg aria-hidden="true"><use href="#i-beaker"/></svg>Validation</button>
-  <button role="tab" data-view="trades"     aria-selected="false" type="button"><svg aria-hidden="true"><use href="#i-list"/></svg>Trades</button>
+  <button role="tab" data-view="live"     aria-selected="true"  type="button"><svg aria-hidden="true"><use href="#i-pulse"/></svg>Live</button>
+  <button role="tab" data-view="screen"   aria-selected="false" type="button"><svg aria-hidden="true"><use href="#i-grid"/></svg>Screen</button>
+  <button role="tab" data-view="desk"     aria-selected="false" type="button"><svg aria-hidden="true"><use href="#i-gavel"/></svg>Desk</button>
+  <button role="tab" data-view="research" aria-selected="false" type="button"><svg aria-hidden="true"><use href="#i-beaker"/></svg>Research</button>
 </nav>
 
 <script>
-const VIEWS = ["overview", "costs", "validation", "trades"];
+const VIEWS = ["live", "screen", "desk", "research"];
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
@@ -347,16 +452,16 @@ const stat  = (k, v, cls = "", hero = false) =>
 
 /* ---- navigation: real history entries, so Back works ---- */
 function show(view, push = true) {
-  if (!VIEWS.includes(view)) view = "overview";
+  if (!VIEWS.includes(view)) view = "live";
   VIEWS.forEach(v => { $("#view-" + v).hidden = v !== view; });
   $$("[role=tab]").forEach(t => t.setAttribute("aria-selected", String(t.dataset.view === view)));
   if (push && location.hash.slice(1) !== view) history.pushState({view}, "", "#" + view);
   window.scrollTo({top: 0, behavior: "instant"});
 }
 $$("[role=tab]").forEach(t => t.addEventListener("click", () => show(t.dataset.view)));
-addEventListener("popstate", e => show(e.state?.view || location.hash.slice(1) || "overview", false));
+addEventListener("popstate", e => show(e.state?.view || location.hash.slice(1) || "live", false));
 
-/* ---- overview ---- */
+/* ---- live ---- */
 async function loadState() {
   let s;
   try {
@@ -367,7 +472,7 @@ async function loadState() {
     return;
   }
 
-  const tiles = $("#tiles"), banners = $("#banners"), foot = $("#overview-foot");
+  const tiles = $("#tiles"), banners = $("#banners"), foot = $("#live-foot");
 
   if (!s.running) {
     $("#pulse").dataset.state = "off";
@@ -507,6 +612,191 @@ $("#run").addEventListener("click", async () => {
     <em>deflated</em> p-value is below 0.05 <em>and</em> out-of-sample Sharpe beats buy &amp; hold — both, not either.</p>`;
 });
 
+/* ---- screen ---- */
+let screenPoll = null;
+
+$("#sc-run").addEventListener("click", async () => {
+  const btn = $("#sc-run"), out = $("#sc-out");
+  const body = {
+    strategy: $("#sc-strategy").value,
+    universe: $("#sc-universe").value,
+    count: +$("#sc-count").value,
+  };
+  btn.disabled = true;
+  out.innerHTML = `<div class="panel"><div class="panel-body">
+      <div class="foot">Screening ${body.count} assets…</div>
+      <div class="progress"><span></span></div></div></div>`;
+
+  let started;
+  try {
+    started = await (await fetch("/api/screen", {
+      method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body),
+    })).json();
+  } catch {
+    out.innerHTML = `<div class="alert bad">${icon("i-alert")}<div>Could not start the screen.</div></div>`;
+    btn.disabled = false; return;
+  }
+  if (started.error) {
+    out.innerHTML = `<div class="alert bad">${icon("i-alert")}<div>${started.error}</div></div>`;
+    btn.disabled = false; return;
+  }
+
+  clearInterval(screenPoll);
+  screenPoll = setInterval(async () => {
+    let job;
+    try { job = await (await fetch("/api/screen/" + started.job)).json(); } catch { return; }
+
+    if (job.stage === "failed") {
+      clearInterval(screenPoll); btn.disabled = false;
+      out.innerHTML = `<div class="alert bad">${icon("i-alert")}<div>${job.error}</div></div>`;
+      return;
+    }
+    if (job.stage !== "done") {
+      out.querySelector(".foot").textContent =
+        `${job.stage}${job.total ? ` ${job.total} assets` : ""}… ${job.elapsed}s`;
+      return;
+    }
+
+    clearInterval(screenPoll); btn.disabled = false;
+    renderScreen(job);
+  }, 700);
+});
+
+function renderScreen(job) {
+  const verdict = job.honest_hits
+    ? `<div class="alert good">${icon("i-alert")}<div><strong>${job.honest_hits} survived
+        ${job.total_trials} trials.</strong> Paper-trade before risking anything &mdash; still not proof.</div></div>`
+    : `<div class="alert warn">${icon("i-alert")}<div><strong>Nothing survives ${job.total_trials} trials.</strong>
+        ${job.naive_hits} looked significant per-asset; that is what luck produces at this many attempts.</div></div>`;
+
+  const rows = job.rows.slice(0, 25).map(r => `
+    <tr class="${r.p_honest < .05 ? "mark" : ""}">
+      <td>${r.asset}</td>
+      <td class="${tone(r.sharpe)}">${r.sharpe.toFixed(2)}</td>
+      <td class="dim">${r.bench_sharpe.toFixed(2)}</td>
+      <td class="${tone(r.total_return)}">${pct(r.total_return)}</td>
+      <td class="bad">${pct(r.max_dd)}</td>
+      <td class="${r.p_naive < .05 ? "warn" : "dim"}">${r.p_naive.toFixed(4)}</td>
+      <td class="${r.p_honest < .05 ? "good" : "dim"}">${r.p_honest.toFixed(4)}</td>
+    </tr>`).join("");
+
+  $("#sc-out").innerHTML = `
+    ${verdict}
+    <div class="grid-2">
+      ${stat("Assets screened", job.rows.length)}
+      ${stat("Total trials", job.total_trials, "warn")}
+    </div>
+    <div class="panel"><div class="scroll"><table>
+      <thead><tr><th>Asset</th><th>Sharpe</th><th>vs hold</th><th>Return</th>
+                 <th>Max DD</th><th>p (per-asset)</th><th>p (whole screen)</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div></div>
+    ${job.rows.length > 25 ? `<p class="foot">Showing the 25 most significant of ${job.rows.length}.</p>` : ""}
+    ${job.skipped.length ? `<p class="foot">Skipped ${job.skipped.length}:
+        ${job.skipped.slice(0,4).map(s => s.asset).join(", ")}${job.skipped.length > 4 ? "…" : ""}
+        &mdash; bad prices or too little history. They are not counted in the trial total.</p>` : ""}
+    <p class="foot">Evaluated in ${job.elapsed}s.</p>`;
+}
+
+/* ---- desk ---- */
+$("#dk-run").addEventListener("click", async () => {
+  const btn = $("#dk-run"), out = $("#dk-out");
+  btn.disabled = true;
+  out.innerHTML = `<div class="panel"><div class="empty">Convening…</div></div>`;
+
+  let d;
+  try {
+    d = await (await fetch(`/api/desk?strategy=${encodeURIComponent($("#dk-strategy").value)}`
+      + `&universe=${$("#dk-universe").value}&seed=${$("#dk-seed").value}`)).json();
+  } catch {
+    out.innerHTML = `<div class="alert bad">${icon("i-alert")}<div>Request failed.</div></div>`;
+    btn.disabled = false; return;
+  }
+  btn.disabled = false;
+  if (d.error) {
+    out.innerHTML = `<div class="alert bad">${icon("i-alert")}<div>${d.error}</div></div>`;
+    return;
+  }
+
+  const vetoes = d.verdicts.filter(v => !v.approved);
+  out.innerHTML = `
+    <div class="alert ${d.approved ? "good" : "warn"}">${icon("i-alert")}<div>${d.approved
+      ? `<strong>Approved</strong> — trade at ${pct(d.position)} of equity. Unanimous.`
+      : `<strong>Rejected</strong> by ${vetoes.map(v => v.agent).join(", ")}. A veto is final.`}</div></div>
+    <div class="panel">${d.verdicts.map(v => `
+      <div class="verdict">
+        <span class="chip ${v.approved ? "pass" : "veto"}">${v.approved ? "PASS" : "VETO"}</span>
+        <div class="verdict-body">
+          <div class="verdict-agent">${v.agent}</div>
+          <div class="verdict-mandate">${d.mandates[v.agent] || ""}</div>
+          <div class="verdict-reason">${v.reason}</div>
+        </div>
+      </div>`).join("")}</div>
+    <p class="foot">${d.dataset} · parameters ${JSON.stringify(d.params)}
+      ${d.n_trials ? `· ${d.n_trials} configs searched` : ""}</p>`;
+});
+
+/* ---- cost & risk ---- */
+$("#an-run").addEventListener("click", async () => {
+  const btn = $("#an-run"), out = $("#an-out");
+  btn.disabled = true;
+  out.innerHTML = `<div class="panel"><div class="empty">Simulating…</div></div>`;
+
+  let a;
+  try {
+    a = await (await fetch("/api/analyze?strategy=" + encodeURIComponent($("#strategy").value))).json();
+  } catch {
+    out.innerHTML = `<div class="alert bad">${icon("i-alert")}<div>Request failed.</div></div>`;
+    btn.disabled = false; return;
+  }
+  btn.disabled = false;
+  if (a.error) {
+    out.innerHTML = `<div class="alert bad">${icon("i-alert")}<div>${a.error}</div></div>`;
+    return;
+  }
+
+  const meter = (v, cls) => `<div class="meter"><span style="width:${Math.min(v*100,100).toFixed(1)}%;background:var(--${cls})"></span></div>`;
+
+  out.innerHTML = `
+    <div class="section">
+      <h2>What it must clear, and what could end it</h2>
+      <div class="grid-2">
+        ${stat("Annual cost drag", pct(a.drag), a.drag > .15 ? "bad" : a.drag > .05 ? "warn" : "good")}
+        ${stat("Round trips/yr", a.round_trips.toFixed(1), "dim")}
+      </div>
+      <div class="panel"><div class="scroll"><table>
+        <thead><tr><th>Trading at</th><th>Round trips/yr</th><th>Annual drag</th></tr></thead>
+        <tbody>${a.reference.map(r => `<tr><td class="dim">${r.label}</td>
+          <td class="dim">${r.round_trips}</td>
+          <td class="${r.drag > .4 ? "bad" : r.drag > .15 ? "warn" : "dim"}">${pct(r.drag)}</td></tr>`).join("")}
+        </tbody>
+      </table></div></div>
+
+      <h2>Probability of drawdown within a year</h2>
+      <div class="panel"><div class="panel-body">
+        ${a.leverage.map(l => `
+          <div>
+            <div class="ctl-head" style="display:flex;justify-content:space-between">
+              <label style="font-size:12.5px;color:var(--fg-muted)">${l.leverage}× leverage — wiped out</label>
+              <output class="num" style="font-weight:600">${pct(l.p_wiped_out)}</output>
+            </div>
+            ${meter(l.p_wiped_out, l.p_wiped_out > .2 ? "bad" : l.p_wiped_out > .02 ? "warn" : "good")}
+          </div>`).join("")}
+      </div></div>
+
+      ${a.kelly <= 0
+        ? `<div class="alert warn">${icon("i-alert")}<div><strong>Estimated edge is negative</strong>
+            (${pct(a.annual_edge)}/yr). The growth-optimal size is zero — do not trade this.</div></div>`
+        : `<div class="alert info">${icon("i-alert")}<div>Full Kelly ${a.kelly.toFixed(2)}×,
+            half Kelly ${a.half_kelly.toFixed(2)}×. Kelly assumes the edge estimate is right; it is
+            an estimate from one sample, so bet less than it says.</div></div>`}
+
+      <p class="foot">${a.strategy} ${JSON.stringify(a.params)} — ${a.basis}.
+      Ruin is bootstrapped from this strategy's own returns, so it can never produce a day worse
+      than the worst one in the sample: read it as a floor on risk, not an estimate of it.</p>
+    </div>`;
+});
+
 /* ---- refresh ---- */
 async function refreshAll() {
   const btn = $("#refresh");
@@ -516,7 +806,7 @@ async function refreshAll() {
 }
 $("#refresh").addEventListener("click", refreshAll);
 
-show(location.hash.slice(1) || "overview", false);
+show(location.hash.slice(1) || "live", false);
 refreshAll();
 setInterval(refreshAll, 15000);
 </script>
