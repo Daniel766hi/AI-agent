@@ -7,6 +7,20 @@ parameter search presented as discovery. This one is built so those three
 failure modes are structurally hard to commit, and it reports "no edge" loudly
 when that's the truth — which it usually is.
 
+## Run it on real data, with no setup
+
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Daniel766hi/AI-agent/blob/claude/genjutsu-plugin-install-64u27l/notebooks/quickstart.ipynb)
+
+`notebooks/quickstart.ipynb` runs the whole system end to end — fetch real IDX
+and crypto prices, walk-forward one strategy, screen them all, put the best
+through the agent desk, then price the cost and ruin. No key, no install,
+nothing trades.
+
+Colab is the shortest path to **real** prices: it has open network access, so
+the exchange and market-data APIs a Claude Code web sandbox blocks are
+reachable there. Every analysis cell was executed before publishing, with
+stand-in data for the one cell that needs the network.
+
 ## Quick start
 
 Needs Python 3.11 or newer. The whole path below was verified from a clean

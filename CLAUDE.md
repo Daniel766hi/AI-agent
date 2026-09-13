@@ -63,6 +63,10 @@ asked:
 - **Anything reaching a URL is validated first.** Symbols fetched from the
   browser must match what a ticker can contain — traversal, injection, markup
   and over-length are refused with a 400 before any request is made.
+- **The notebook is a deliverable, so it runs.** Every analysis cell is executed
+  before publishing, with stand-in data only for the cell that needs the network.
+  `tests/test_notebook.py` asserts it parses, ships no stale output, clones the
+  branch that exists, and only calls functions that still exist.
 - **A diagnostic reads like a sentence.** The Data view says which host refused
   and why; it never shows a urllib3 traceback. Four sources failing the same way
   must not produce four identical walls of text.
@@ -146,6 +150,7 @@ correct the claim.
 | `run_tests.py` | Runs every self-check, non-zero on failure |
 | `web/app.py` | Token-auth dashboard, localhost-bound |
 | `deploy/trading-agent.service` | systemd unit for unattended running |
+| `notebooks/quickstart.ipynb` | Colab run-through on real data, end to end |
 
 Adding a module means adding a row. `tests/test_docs.py` fails otherwise — the
 table drifted silently for seven files before that check existed.
