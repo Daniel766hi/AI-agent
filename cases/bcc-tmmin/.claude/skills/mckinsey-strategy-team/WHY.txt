@@ -1,0 +1,142 @@
+MCKINSEY-STRATEGY-TEAM — WHY, HOW, AND WHAT IT'S WORTH
+======================================================
+
+
+IT RUNS LOCALLY, NOT IN THE CLOUD
+---------------------------------
+"Agent teams" is an experimental Claude Code feature that runs several Claude
+Code sessions at once on your own machine, so you watch each teammate work
+live. It is not a cloud service. The
+reason to use teams is not "it's cloud" — it's point 1 below.
+
+
+1. WHAT WAS CHOSEN (and why)
+----------------------------
+An AGENT TEAM with a team lead + a wave of teammates, not a single analysis and
+not the older fire-and-forget subagent approach.
+
+a) Teams instead of subagents.
+   Two things a team gives you that bare subagents don't: you can STEER a named
+   teammate mid-run (message it, redirect it) instead of waiting for a one-shot
+   to return; and teammates can MESSAGE EACH OTHER to debate (used in deep mode,
+   where two verifiers argue an assumption until only the robust one stands).
+   The default already gets most of the value structurally — divergent option
+   generators and an independent verifier panel — but the live steering and the
+   optional debate are why a team beats a plain workflow here.
+
+b) One team with differentiated roles, not multiple teams.
+   Claude Code allows only one team at a time (no nested teams). So: one team,
+   run in waves, with roles — diagnose, market, two option-generators, and a
+   panel of verifiers that tears the draft apart.
+
+c) The 21 McKinsey-style frameworks as a REFERENCE LIBRARY inside the skill,
+   not 21 separate skills.
+   Two reasons: (1) 21 stray slash-commands you never call individually is
+   clutter; (2) more important, a teammate does NOT inherit a subagent's skill
+   frontmatter — installing them as skills wouldn't help the teammates anyway.
+   So the teammates just READ the framework files. That always works.
+
+d) The Six Workflow Patterns, wired onto strategy work.
+   (Reference: the "Six Workflow Patterns" — classify-and-act, fan-out-and-
+   synthesize, adversarial verification, generate-and-filter, tournament,
+   loop-until-done.)
+
+   A STANDARD run uses four, in order:
+   1. classify-and-act       — lead picks problem type + frameworks per role.
+   2. fan-out-and-synthesize — wave A (diagnose + market) runs in parallel and
+                               the lead merges; later the draft is synthesized.
+   3. generate-and-filter    — wave B generates DIVERGENT options from opposing
+                               mandates (bull vs lean), then the lead filters
+                               them to a scored shortlist. This is what kills
+                               the old single-"strategy"-teammate false binary.
+   4. adversarial verification — the draft faces a PANEL of verifiers, each a
+                               different lens; a claim >=2 of them call fatal
+                               does not survive. (v1 had a lone red-teamer, so
+                               the headline "debate" was mostly aspirational.)
+
+   DEEP MODE (high-stakes, hard-to-reverse calls) adds the last two:
+   5. tournament      — pairwise-judge the surviving options down to one winner.
+   6. loop-until-done — keep the war-game lens hunting risks until two rounds
+                        turn up nothing new.
+
+   So all six are available; four are on by default, and depth scales to the
+   stakes instead of by habit. (v1 used only the first three and called the rest
+   overkill — that left the headline value, real adversarial pressure, mostly
+   on the table.)
+
+
+2. HOW IT WORKS
+---------------
+You start it with: "use the strategy team to prepare a decision on X." Then:
+
+STEP 0 — Intake. The lead asks a few sharp questions: the real decision
+   question, the audience, the constraints, what's already known. Better
+   context in, better result out.
+
+STEP 1 — Classify. The lead picks the problem type (growth stuck? merger?
+   pricing? new market?) and the right frameworks per role, then shows you a
+   short plan ("I'll spawn these teammates with these frameworks — OK?"). That
+   is your steering moment before tokens burn.
+
+STEP 2 — Workspace. The lead writes all context to one shared file
+   (/tmp/strat-team-<slug>/brief.md). Teammates don't inherit your
+   conversation, so everything flows through that file.
+
+STEP 3 — Wave A: diagnose + market. The lead opens the team (TeamCreate) and
+   spawns two teammates IN PARALLEL — one diagnoses the situation, one maps the
+   market and competition. Each reads the brief + its frameworks and writes to
+   its own file. These two are the factual floor; options come next, not now.
+   You can message any teammate mid-run to steer it.
+
+STEP 4 — Wave B: options (generate-and-filter). Two generators run with
+   OPPOSING mandates — "bull" (maximize upside) and "lean" (maximize resilience)
+   — each reading the diagnose + market files so the options stand on real
+   findings. Each proposes 2-3 distinct options with "what must be true". The
+   lead then filters: dedupe, drop the dominated ones, score the rest against
+   the decision criteria, and keep the 2-3 strongest. (Deep mode adds a
+   contrarian generator for wider divergence.)
+
+STEP 5 — Synthesis. The lead picks the recommended option and builds a draft
+   using the Pyramid Principle (governing thought -> 3 arguments -> backing),
+   naming the load-bearing assumptions explicitly — the panel attacks those.
+
+STEP 6 — Pressure-test (the core). Only NOW does the lead spawn a PANEL of
+   verifiers, each with a different lens — assumptions, war-game, execution &
+   economics. Their job is NOT to confirm but to REFUTE. The rule that makes it
+   robust: a claim that >=2 of the panel independently call fatal does not
+   survive — it gets fixed, hedged, or the recommendation changes. (Deep mode
+   loops the war-game lens until risks run dry, and runs a tournament to pick
+   between options that are still close.)
+
+STEP 7 — Deliverable. The lead folds the surviving critique in and ships a
+   board-ready decision memo + narrative: decision question, recommendation,
+   options with trade-offs, business case, top risks + mitigations, first 90
+   days, and a 60-second story with hostile Q&A. Written to a durable file so
+   you can take it into the meeting.
+
+STEP 8 — Cleanup. The lead shuts the teammates down and cleans up the team.
+
+
+3. WHAT IT'S WORTH
+------------------
+- An analysis that SURVIVES the meeting. Not just advice, but advice run through
+  a panel of hostile verifiers where a weakness two of them agree on doesn't get
+  to slide. You know the weak spots before anyone in the room finds them.
+
+- Structure on a vague or large question. A merger or strategy question gets
+  split into diagnose / market / competing-options / risk, each with a proven
+  method — instead of one lump of gut feel.
+
+- Speed and depth at once. A team of "consultants" works in parallel waves in
+  minutes, not a sequential session over hours. And you can steer live.
+
+- A concrete, shareable deliverable: a decision memo you put straight into a
+  leadership or board meeting.
+
+- Reusable and portable. It's one self-contained folder you can hand to a
+  colleague as-is.
+
+COST / WHEN NOT. A standard run is ~7 live sessions across its waves (more in
+deep mode), so noticeably more tokens than an ordinary chat. Use it for real
+decisions, not a quick question, and default to standard mode unless the call is
+genuinely high-stakes. For a single framework, load that framework directly.
