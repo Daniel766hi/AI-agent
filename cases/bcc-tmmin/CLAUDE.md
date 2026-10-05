@@ -49,7 +49,7 @@ Headline numbers (each tied out by `python work/8_tieout.py`):
 | `model/sd_model.py` | System dynamics model (economics + sustainability); `--quick` skips Monte Carlo and leaves `sd_results.json` alone |
 | `outputs/proposal_draft.md` | Paper text for the Word template |
 | `outputs/deck_closed_loop_kaizen.pptx` | Deck, built by `outputs/build_deck.js` from `model/sd_results.json` |
-| `dashboard/` | Interactive simulator: `sd_model.js` is a browser port of `model/sd_model.py`; `node dashboard/check_parity.js` must pass before `python dashboard/build_dashboard.py` writes `index.html`. Published at https://claude.ai/artifact/REL2eESLQEicz3dLZrEkES |
+| `dashboard/` | The whole case in one page (11 tabs: summary, diagnosis, solution, sealer proof, SD simulator, financial calculator, stress test, sustainability, roadmap, KPIs, Q&A). `sd_model.js` and `fin_model.js` are browser ports of `model/sd_model.py` and the spreadsheet model; `build_dashboard.py` reads every other number from its source file. `node dashboard/check_parity.js` must pass before `python dashboard/build_dashboard.py`. Published at https://claude.ai/artifact/REL2eESLQEicz3dLZrEkES |
 
 ## Rules for working here
 

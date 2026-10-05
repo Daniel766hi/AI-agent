@@ -25,5 +25,17 @@ for (const k of ["do_nothing", "tech_only", "people_only", "clk_v1", "clk_v2"]) 
     if (k === "clk_v2") close("clk_v2: CO2 avoided 2030 (t)", e.tco2.find((r) => r.year === 2030).tco2, R.env.find((r) => r.year === 2030).tco2, 1);
   }
 }
+// Financial model: run_tests.py base NPV/run-rate and the scenario NPVs in work/5_tests.md
+const F = require("./fin_model.js");
+const { execFileSync } = require("child_process");
+const rt = execFileSync("python3", ["run_tests.py"], { cwd: path.join(__dirname, "..", "model"), encoding: "utf8" });
+const m = rt.match(/base NPV ([\d.]+) run-rate ([\d.]+)/);
+const fbase = F.run({ ...F.SCEN.dasar });
+close("finance: base NPV vs run_tests.py", fbase.npv, +m[1], 0.01);
+close("finance: run-rate vs run_tests.py", fbase.runRate, +m[2], 0.05);
+close("finance: conservative NPV (work/5_tests.md)", F.run({ ...F.SCEN.konservatif }).npv, -55.4, 0.05);
+close("finance: optimistic NPV (work/5_tests.md)", F.run({ ...F.SCEN.optimis }).npv, 102.4, 0.05);
+close("finance: NPV incl. residual value (data/facts.md)", fbase.npvResidual, 52.8, 0.05);
+close("finance: break-even first-year saving, Rp80 B", F.breakEven(80).first, 19.6, 0.05);
 console.log(fails ? `\n${fails} mismatch(es)` : "\nbrowser model matches the Python model");
 process.exit(fails ? 1 : 0);

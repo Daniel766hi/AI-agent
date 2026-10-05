@@ -4,14 +4,14 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
-/* Layout: a plant control board. Controls panel (sticky on wide screens) beside a results board:
-   status tiles first, the cost trajectory as the hero chart, then supporting small multiples,
-   money, sustainability, and the static stress test from the Python model. */
+/* Layout: a plant control board for the whole case. A sticky tab rail (one tab per stage of the
+   answer) over a results board; interactive tabs pair a controls panel with live charts. */
 :root {
   --bg: #f2f5f5; --surface: #ffffff; --surface-2: #e9eff0; --ink: #13232a; --muted: #53656c; --line: #d5dfe1;
   --andon: #c98a00; --andon-soft: #fbefcf; --andon-ink: #13232a;
   --good: #1d7a45; --good-soft: #dff1e6; --warn: #9a6400; --warn-soft: #f8ead0; --bad: #b3362b; --bad-soft: #f7e0dd;
-  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --baseline: #8a9599; --grid: #e3e9ea;
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100; --series-5: #e87ba4;
+  --baseline: #8a9599; --grid: #e3e9ea;
   --f-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
   --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
   --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
@@ -22,7 +22,8 @@
     --bg: #0d1618; --surface: #142125; --surface-2: #1b2b30; --ink: #e5eef0; --muted: #94a7ad; --line: #26383d;
     --andon: #f0b323; --andon-soft: #3a2f12; --andon-ink: #13232a;
     --good: #4cc27f; --good-soft: #15301f; --warn: #e3a63a; --warn-soft: #33270f; --bad: #ef7b6f; --bad-soft: #3a1b18;
-    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --baseline: #7d8a8e; --grid: #22333a;
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500; --series-5: #d55181;
+    --baseline: #7d8a8e; --grid: #22333a;
     color-scheme: dark;
   }
 }
@@ -30,47 +31,56 @@
   --bg: #0d1618; --surface: #142125; --surface-2: #1b2b30; --ink: #e5eef0; --muted: #94a7ad; --line: #26383d;
   --andon: #f0b323; --andon-soft: #3a2f12; --andon-ink: #13232a;
   --good: #4cc27f; --good-soft: #15301f; --warn: #e3a63a; --warn-soft: #33270f; --bad: #ef7b6f; --bad-soft: #3a1b18;
-  --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --baseline: #7d8a8e; --grid: #22333a;
+  --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500; --series-5: #d55181;
+  --baseline: #7d8a8e; --grid: #22333a;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5; padding: 0 16px; }
 .wrap { max-width: 1320px; margin: 0 auto; padding-block: 20px 48px; }
 h1, h2, h3 { font-family: var(--f-display); font-weight: 600; letter-spacing: 0.01em; text-wrap: balance; margin: 0; }
 h1 { font-size: clamp(30px, 4vw, 42px); line-height: 1.05; }
 h2 { font-size: 24px; line-height: 1.15; }
 h3 { font-size: 18px; }
+p { margin: 0; }
 .eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
-p { margin: 0; }
 .muted { color: var(--muted); }
-header.top { display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: end; justify-content: space-between; margin-bottom: 18px; }
-header.top .lede { max-width: 62ch; color: var(--muted); margin-top: 6px; }
+header.top { display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: end; justify-content: space-between; margin-bottom: 14px; }
+header.top .lede { max-width: 66ch; color: var(--muted); margin-top: 6px; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); color: var(--muted); font-size: 12.5px; border: 1px solid var(--line); }
+nav.tabs { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 8px; margin-bottom: 14px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+nav.tabs .rail { display: flex; gap: 4px; min-width: max-content; }
+nav.tabs a { font-size: 13.5px; font-weight: 500; color: var(--muted); text-decoration: none; padding: 7px 11px; border-radius: 6px; white-space: nowrap; }
+nav.tabs a:hover { color: var(--ink); background: var(--surface-2); }
+nav.tabs a[aria-current="page"] { color: var(--andon-ink); background: var(--andon); font-weight: 600; }
 .layout { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 20px; align-items: start; }
 @media (max-width: 980px) { .layout { grid-template-columns: minmax(0, 1fr); } }
-.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; }
-aside.panel { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); display: grid; gap: 16px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; min-width: 0; }
+aside.panel { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 64px); display: grid; gap: 16px; }
 @media (max-width: 980px) { aside.panel { position: static; } }
 .ctl { display: grid; gap: 6px; }
 .ctl label, .ctl .lab { font-size: 13.5px; font-weight: 500; display: flex; justify-content: space-between; gap: 8px; }
-.ctl .val { font-family: var(--f-mono); font-size: 13px; color: var(--ink); background: var(--andon-soft); padding: 0 6px; border-radius: 4px; }
+.ctl .val { font-family: var(--f-mono); font-size: 13px; color: var(--ink); background: var(--andon-soft); padding: 0 6px; border-radius: 4px; white-space: nowrap; }
 .ctl small { color: var(--muted); font-size: 12px; line-height: 1.35; }
 input[type=range] { width: 100%; accent-color: var(--andon); }
+input[type=search] { font: inherit; width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
 .seg { display: flex; flex-wrap: wrap; gap: 6px; }
 .seg button { font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--andon); border-color: var(--andon); color: var(--andon-ink); font-weight: 600; }
 .seg button:hover { border-color: var(--andon); }
-button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--andon); outline-offset: 2px; }
+button:focus-visible, input:focus-visible, a:focus-visible, summary:focus-visible, .track:focus-visible { outline: 2px solid var(--andon); outline-offset: 2px; }
 .reset { font: inherit; font-size: 13px; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; }
 .reset:hover { border-color: var(--andon); }
 .toggle { display: flex; align-items: center; gap: 8px; font-size: 13.5px; cursor: pointer; }
 .toggle input { accent-color: var(--andon); width: 16px; height: 16px; }
-main { display: grid; gap: 20px; min-width: 0; }
+.stack { display: grid; gap: 20px; min-width: 0; }
 .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 @media (max-width: 1100px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; display: grid; gap: 4px; min-width: 0; }
+@media (max-width: 460px) { .tiles { grid-template-columns: minmax(0, 1fr); } }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; display: grid; gap: 4px; min-width: 0; align-content: start; }
 .tile .k { font-size: 12.5px; color: var(--muted); }
 .tile .v { font-family: var(--f-display); font-size: 34px; font-weight: 600; line-height: 1.05; font-variant-numeric: tabular-nums; }
 .tile .d { font-size: 12.5px; color: var(--muted); }
@@ -79,9 +89,9 @@ main { display: grid; gap: 20px; min-width: 0; }
 .pill.warn { background: var(--warn-soft); color: var(--warn); }
 .pill.bad { background: var(--bad-soft); color: var(--bad); }
 .card-h { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 16px; margin-bottom: 10px; }
-.card-h p { color: var(--muted); font-size: 13.5px; max-width: 70ch; }
+.card-h p { color: var(--muted); font-size: 13.5px; max-width: 72ch; }
 .chartbox { position: relative; height: 330px; }
-.chartbox.sm { height: 210px; }
+.chartbox.sm { height: 220px; }
 .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 @media (max-width: 1100px) { .grid3 { grid-template-columns: minmax(0, 1fr); } }
@@ -90,20 +100,22 @@ main { display: grid; gap: 20px; min-width: 0; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .sw { width: 18px; height: 0; border-top: 3px solid; display: inline-block; }
 .sw.dash { border-top-style: dashed; }
+.box { width: 11px; height: 11px; border-radius: 2px; display: inline-block; }
 .tablewrap { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
 th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { font-weight: 600; color: var(--muted); font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.04em; }
-td.n, th.n { text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+td.n, th.n { text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
 tr.sel td { background: var(--andon-soft); }
 details summary { cursor: pointer; font-size: 13px; color: var(--muted); margin-top: 8px; }
+details.qa summary { font-size: 15px; color: var(--ink); font-weight: 500; margin: 0; padding: 4px 0; }
 .gate { display: grid; gap: 8px; }
 .gate .row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 13.5px; }
 .mark { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; }
 .mark.ok { background: var(--good-soft); color: var(--good); }
 .mark.no { background: var(--bad-soft); color: var(--bad); }
 .range { display: grid; gap: 10px; }
-.range .r { display: grid; grid-template-columns: minmax(150px, 230px) minmax(0, 1fr) 72px; gap: 10px; align-items: center; font-size: 13px; }
+.range .r { display: grid; grid-template-columns: minmax(150px, 260px) minmax(0, 1fr) 72px; gap: 10px; align-items: center; font-size: 13px; }
 @media (max-width: 620px) { .range .r { grid-template-columns: minmax(0, 1fr) 64px; } .range .r .track { grid-column: 1 / -1; } }
 .track { position: relative; height: 22px; background: var(--surface-2); border-radius: 4px; }
 .track .zero { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--ink); opacity: 0.6; }
@@ -111,138 +123,329 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); margin-
 .track .dot { position: absolute; top: 5px; width: 12px; height: 12px; border-radius: 50%; transform: translateX(-6px); background: var(--baseline); border: 2px solid var(--surface); }
 .r.plan .bar, .r.plan .dot { background: var(--series-1); }
 .r .p { font-family: var(--f-mono); text-align: right; font-variant-numeric: tabular-nums; }
-.tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--bg); padding: 6px 9px; border-radius: 6px; font-size: 12.5px; z-index: 10; max-width: 260px; }
-.foot { font-size: 12.5px; color: var(--muted); display: grid; gap: 6px; max-width: 95ch; }
+.tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--bg); padding: 6px 9px; border-radius: 6px; font-size: 12.5px; z-index: 10; max-width: 280px; }
+.answer { font-size: 17px; line-height: 1.55; max-width: 80ch; }
+.answer strong { font-weight: 600; }
+.cards3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 900px) { .cards3 { grid-template-columns: minmax(0, 1fr); } }
+.cardx { background: var(--surface-2); border-radius: 8px; padding: 14px; display: grid; gap: 6px; align-content: start; }
+.cardx h3 { font-size: 17px; }
+.cardx .bad-t { color: var(--bad); font-weight: 600; font-size: 13.5px; }
+.ask { display: grid; gap: 8px; counter-reset: ask; list-style: none; padding: 0; margin: 0; }
+.ask li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: start; counter-increment: ask; }
+.ask li::before { content: counter(ask); width: 26px; height: 26px; border-radius: 50%; background: var(--andon); color: var(--andon-ink); display: grid; place-items: center; font-weight: 700; font-size: 13px; }
+.links { display: flex; flex-wrap: wrap; gap: 8px; }
+.links a { font-size: 13.5px; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); padding: 6px 10px; border-radius: 6px; text-decoration: none; }
+.links a:hover { border-color: var(--andon); }
+.root { font-size: 16px; font-style: italic; max-width: 85ch; }
+.score { font-family: var(--f-mono); font-weight: 600; }
+.risk { display: inline-block; min-width: 30px; text-align: center; border-radius: 4px; padding: 0 6px; font-family: var(--f-mono); font-weight: 600; }
+.foot { font-size: 12.5px; color: var(--muted); display: grid; gap: 6px; max-width: 95ch; margin-top: 24px; }
 .note { font-size: 13px; color: var(--muted); }
+blockquote { margin: 6px 0 0; padding-left: 12px; border-left: 3px solid var(--andon); color: var(--ink); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 
 <div class="wrap">
   <header class="top">
     <div>
-      <div class="eyebrow">M3C 2026 · TMMIN · model system dynamics</div>
+      <div class="eyebrow">M3C 2026 · TMMIN · Closed-Loop Kaizen</div>
       <h1>Simulator Closed-Loop Kaizen</h1>
-      <p class="lede">Geser asumsi di panel kiri. Model yang sama dengan <span class="num">model/sd_model.py</span> dijalankan ulang di browser: biaya, NPV, gate, orang, dan CO₂ berubah langsung. Angka Exhibit 3–9 adalah data dummy dari panitia.</p>
+      <p class="lede">Semua hasil kasus di satu tempat: diagnosis, solusi, bukti, model finansial, model system dynamics, uji stres, keberlanjutan, roadmap, KPI, dan Q&amp;A. Tab Simulator dan Finansial menjalankan ulang model di browser. Exhibit 3–9 adalah data dummy panitia.</p>
     </div>
     <div class="chips" aria-label="Parameter tetap dari casebook">
       <span class="chip">Diskonto 10%</span><span class="chip">Eskalasi 4%/thn</span><span class="chip">Umur teknologi 5 thn</span><span class="chip">175.000 unit · Rp3,2 jt/unit</span>
     </div>
   </header>
 
-  <div class="layout">
-    <aside class="panel" aria-label="Panel kendali asumsi">
-      <div class="ctl">
-        <span class="lab">Kebijakan</span>
-        <div class="seg" id="policy" role="group" aria-label="Kebijakan">
-          <button type="button" data-v="do_nothing">Tanpa tindakan</button>
-          <button type="button" data-v="tech_only">Beli teknologi</button>
-          <button type="button" data-v="people_only">SDM saja</button>
-          <button type="button" data-v="clk_v1">CLK v1</button>
-          <button type="button" data-v="clk_v2">CLK v2</button>
-        </div>
-        <small id="policyNote"></small>
-      </div>
-      <div class="ctl">
-        <label for="capex">Investasi program <span class="val" id="capexV"></span></label>
-        <input type="range" id="capex" min="40" max="120" step="5">
-        <small>Rentang casebook Rp40–120 M. Program SDM saja memakai Rp12 M tetap.</small>
-      </div>
-      <div class="ctl">
-        <label for="adopt">Adopsi yang terealisasi <span class="val" id="adoptV"></span></label>
-        <input type="range" id="adopt" min="0.2" max="1" step="0.05">
-        <small>Porsi efek desain tiap tuas yang benar-benar tercapai. Monte Carlo memakai 60–100%; di bawah 60% = loop gagal.</small>
-      </div>
-      <div class="ctl">
-        <label for="trhc">Target kepatuhan alert <span class="val" id="trhcV"></span></label>
-        <input type="range" id="trhc" min="0.7" max="0.95" step="0.01">
-        <small>Hari ini 69% (31% alert diabaikan, Ex.6B).</small>
-      </div>
-      <div class="ctl">
-        <label for="protect">Waktu perbaikan dilindungi <span class="val" id="protectV"></span></label>
-        <input type="range" id="protect" min="0" max="0.4" step="0.05">
-        <small>Berlaku untuk SDM saja dan CLK v2. Rencana: 30% + ratchet.</small>
-      </div>
-      <div class="ctl">
-        <label for="cplx">Kenaikan kompleksitas varian setelah 2025 <span class="val" id="cplxV"></span></label>
-        <input type="range" id="cplx" min="0" max="0.0625" step="0.003125">
-        <small>2023–25 naik 6,25%/thn (Ex.4: 8 → 9 bulan). Juga mengubah jalur tanpa tindakan.</small>
-      </div>
-      <div class="ctl">
-        <span class="lab">Mulai program</span>
-        <div class="seg" id="delay" role="group" aria-label="Mulai program">
-          <button type="button" data-v="0">Q4 2026</button>
-          <button type="button" data-v="1">Q4 2027</button>
-          <button type="button" data-v="2">Q4 2028</button>
-        </div>
-      </div>
-      <div class="ctl">
-        <span class="lab">Pola belanja</span>
-        <div class="seg" id="phasing" role="group" aria-label="Pola belanja">
-          <button type="button" data-v="light">Pilot-light 10/15/40/25/10</button>
-          <button type="button" data-v="front">Di awal 30/35/25/10/0</button>
-        </div>
-      </div>
-      <label class="toggle"><input type="checkbox" id="gate"> Gate go/no-go akhir 2027</label>
-      <label class="toggle"><input type="checkbox" id="stop2031"> Hentikan program 2031 (uji ketahanan)</label>
-      <button type="button" class="reset" id="reset">Kembali ke rencana dasar</button>
-    </aside>
+  <nav class="tabs" aria-label="Bagian dashboard"><div class="rail" id="rail">
+    <a href="#ringkasan">Ringkasan</a><a href="#diagnosis">Diagnosis</a><a href="#solusi">Solusi</a><a href="#bukti">Bukti sealer</a>
+    <a href="#simulator">Simulator SD</a><a href="#finansial">Finansial</a><a href="#stres">Uji stres</a><a href="#keberlanjutan">Keberlanjutan</a>
+    <a href="#roadmap">Roadmap &amp; gate</a><a href="#kpi">KPI</a><a href="#qa">Q&amp;A juri</a>
+  </div></nav>
 
-    <main>
-      <section class="tiles" aria-label="Ringkasan skenario" id="tiles"></section>
+  <!-- ============================================================ RINGKASAN -->
+  <section data-tab="ringkasan" class="stack">
+    <div class="panel">
+      <div class="eyebrow">Jawaban</div>
+      <p class="answer" style="margin-top:6px">TMMIN sebaiknya mengubah <strong>cara pabrik belajar</strong>, bukan menambah peralatan. Closed-Loop Kaizen menutup jalur balik yang hilang (ke proses penyebab, ke standar bersama, dan ke varian berikutnya) dan melindungi 30% waktu untuk memperbaiki, agar pabrik keluar dari jebakan firefighting.</p>
+    </div>
+    <div class="tiles" id="sumTiles"></div>
+    <div class="grid2">
+      <div class="panel">
+        <div class="card-h"><h2>Biaya: dua model, satu arah</h2><p>Indeks biaya konversi, harga konstan 2025 (skala Ex.3: 2025 = 106).</p></div>
+        <div class="legend" id="legSum"></div>
+        <div class="chartbox sm"><canvas id="cSum"></canvas></div>
+      </div>
+      <div class="panel">
+        <div class="card-h"><h2>Empat keputusan kuartal ini</h2></div>
+        <ol class="ask">
+          <li>Setujui Rp8 M untuk pilot sealer → inspeksi, mulai Q4 2026.</li>
+          <li>Tunjuk satu pemilik standar data pabrik.</li>
+          <li>Lindungi 30% waktu perbaikan dan kunci setiap jam yang dibebaskan loop.</li>
+          <li>Skalakan hanya lewat gate akhir 2027, dan anggarkan pemeliharaan setelah 2030.</li>
+        </ol>
+        <div class="eyebrow" style="margin-top:16px">Batas yang kami nyatakan terbuka</div>
+        <p class="note" style="margin-top:4px" id="sumLimits"></p>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="card-h"><h2>Dokumen dan kode</h2><p>Semua angka di dashboard ini dibaca dari file sumber yang sama.</p></div>
+      <div class="links">
+        <a href="https://github.com/Daniel766hi/AI-agent/pull/1">Pull request</a>
+        <a href="https://github.com/Daniel766hi/AI-agent/tree/claude/case-solution-design-stage-2-8j3v10/cases/bcc-tmmin">Folder proyek</a>
+        <a href="https://github.com/Daniel766hi/AI-agent/blob/claude/case-solution-design-stage-2-8j3v10/cases/bcc-tmmin/outputs/deck_closed_loop_kaizen.pptx">Deck 26 slide</a>
+        <a href="https://github.com/Daniel766hi/AI-agent/blob/claude/case-solution-design-stage-2-8j3v10/cases/bcc-tmmin/outputs/proposal_draft.md">Isi proposal</a>
+        <a href="https://github.com/Daniel766hi/AI-agent/tree/claude/case-solution-design-stage-2-8j3v10/cases/bcc-tmmin/work">Stage 2–8</a>
+        <a href="https://github.com/Daniel766hi/AI-agent/blob/claude/case-solution-design-stage-2-8j3v10/cases/bcc-tmmin/model/sd_model.py">Model system dynamics</a>
+      </div>
+    </div>
+  </section>
 
-      <section class="panel" aria-labelledby="h-cost">
-        <div class="card-h">
-          <h2 id="h-cost">Indeks biaya konversi, harga konstan 2025</h2>
-          <div class="legend" id="legCost"></div>
+  <!-- ============================================================ DIAGNOSIS -->
+  <section data-tab="diagnosis" class="stack" hidden>
+    <div class="tiles" id="diagTiles"></div>
+    <div class="grid2">
+      <div class="panel">
+        <div class="card-h"><h2>Selisih biaya melebar setiap tahun</h2><p>Exhibit 3, indeks biaya konversi per unit Karawang (TMMIN 2023 = 100).</p></div>
+        <div class="legend"><span><i class="sw" style="border-color:var(--series-2)"></i>TMMIN</span><span><i class="sw" style="border-color:var(--series-1)"></i>Pemain baru</span></div>
+        <div class="chartbox sm"><canvas id="cGap"></canvas></div>
+      </div>
+      <div class="panel">
+        <div class="card-h"><h2>Kembali ke 2023 hanya menutup 11–19%</h2><p>Jembatan kenaikan indeks 100 → 106 (porsi biaya adalah asumsi tim). Bagian yang bisa dikendalikan kecil dibanding selisih 17 poin.</p></div>
+        <div class="chartbox sm"><canvas id="cBridge"></canvas></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="card-h"><h2>Ketiga belas indikator memburuk</h2><p>Exhibit 4 dan 6A, 2023 → 2025.</p></div>
+      <div class="grid2"><div class="tablewrap" id="tEx4"></div><div class="tablewrap" id="tEx6a"></div></div>
+    </div>
+    <div class="layout">
+      <aside class="panel" aria-label="Bobot heat map">
+        <div class="eyebrow">Bobot heat map</div>
+        <div class="ctl"><label for="hwC">Biaya <span class="val" id="hwCV"></span></label><input type="range" id="hwC" min="1" max="3" step="1"></div>
+        <div class="ctl"><label for="hwQ">Kualitas <span class="val" id="hwQV"></span></label><input type="range" id="hwQ" min="1" max="3" step="1"></div>
+        <div class="ctl"><label for="hwF">Fleksibilitas <span class="val" id="hwFV"></span></label><input type="range" id="hwF" min="1" max="3" step="1"></div>
+        <small class="note">Skor = (bobot × dampak) × celah maturitas (4 − level). Kolom kanan: berapa kali proses masuk tiga besar dari 27 kombinasi bobot.</small>
+      </aside>
+      <div class="panel">
+        <div class="card-h"><h2>Celah terbesar ada di antara proses</h2><p>Proses × dampak × celah maturitas (Ex.5). Inspeksi dan integrasi data selalu masuk tiga besar.</p></div>
+        <div class="tablewrap" id="tHeat"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="card-h"><h2>Akar masalah</h2></div>
+      <p class="root">Pabrik memecahkan masalah yang sama berulang kali karena sinyal masalah dan pelajaran perbaikan tidak punya jalur kembali, baik ke proses penyebab, ke standar bersama, maupun ke varian berikutnya. Akibatnya laju belajar pabrik kalah dari pesaing.</p>
+      <div class="cards3" style="margin-top:14px">
+        <div class="cardx"><h3>Ke proses penyebab</h3><p>Inspeksi Level 1 tidak mengirim hasil ke hulu; sealer tanpa umpan balik otomatis.</p><p class="bad-t">Scrap +8%, cacat lolos hanya +3%: tertangkap, tetapi terlambat</p></div>
+        <div class="cardx"><h3>Ke standar bersama</h3><p>48% proses kritis bergantung pada 1–2 senior; 71% berbagi lewat coaching informal.</p><p class="bad-t">65% waktu engineer memadamkan masalah yang sama; ide terimplementasi −38%</p></div>
+        <div class="cardx"><h3>Ke varian berikutnya</h3><p>Data Level 1; peralatan point-to-point tanpa standar antarmuka.</p><p class="bad-t">Setiap varian baru sekitar 9 bulan pengerjaan ulang</p></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="card-h"><h2>Peluang tersembunyi di data</h2><p>Exhibit 6B (survei area pilot, N = 120).</p></div>
+      <div class="tablewrap" id="tEx6b"></div>
+    </div>
+  </section>
+
+  <!-- ============================================================ SOLUSI -->
+  <section data-tab="solusi" class="stack" hidden>
+    <div class="panel">
+      <div class="card-h"><h2>Closed-Loop Kaizen v2</h2><p>Tiga loop dengan manusia di pusat, ditambah waktu perbaikan yang dilindungi dan target laju belajar.</p></div>
+      <div class="cards3">
+        <div class="cardx"><h3>Loop kualitas · jidoka</h3><p>Abnormalitas kembali ke proses penyebab dalam hitungan menit, dengan aturan stop, koreksi, atau eskalasi.</p></div>
+        <div class="cardx"><h3>Loop data &amp; peralatan · standardized work</h3><p>Satu standar antarmuka dan data milik TMMIN; varian baru menjadi konfigurasi, bukan pengkabelan ulang.</p></div>
+        <div class="cardx"><h3>Loop manusia &amp; pengetahuan · kaizen, yokoten</h3><p>Alat AI buatan operator, kanal ide satu ketukan, know-how senior ditangkap dan ditautkan ke standard work.</p></div>
+      </div>
+      <p class="note" style="margin-top:12px">Pemantik: 30% waktu engineer dan team leader dilindungi (naik bertahap 6 bulan), dan setiap jam yang dibebaskan loop dikunci untuk perbaikan. Ukuran: poin indeks biaya turun per tahun.</p>
+    </div>
+    <div class="layout">
+      <aside class="panel" aria-label="Bobot kriteria" id="scoreCtl"></aside>
+      <div class="panel">
+        <div class="card-h"><h2>Skoring 13 opsi</h2><p>Skor 1–5 adalah penilaian tim. Geser bobot untuk melihat apakah peringkat bertahan. Kolom terakhir: peringkat #1 dari 20.000 bobot acak (Python).</p></div>
+        <div class="tablewrap" id="tScore"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="card-h"><h2>Area pilot: sealer → inspeksi</h2><p>Final assembly menang bila hanya dampak yang dihitung, dan menjadi gelombang rollout pertama (2028).</p></div>
+      <div class="tablewrap" id="tPilot"></div>
+    </div>
+  </section>
+
+  <!-- ============================================================ BUKTI -->
+  <section data-tab="bukti" class="stack" hidden>
+    <div class="grid2">
+      <div class="panel">
+        <div class="card-h"><h2>Kamera saja menaikkan scrap; loop memangkasnya</h2><p>Simulasi Monte Carlo drift sealer: 175.000 unit, 300 simulasi per skenario. Perubahan scrap area pilot vs hari ini.</p></div>
+        <div class="chartbox"><canvas id="cSim"></canvas></div>
+      </div>
+      <div class="panel">
+        <div class="card-h"><h2>Kepercayaan operator bernilai</h2><p>Penurunan scrap area pilot menurut porsi alert yang diabaikan operator (hari ini 31%).</p></div>
+        <div class="chartbox"><canvas id="cDismiss"></canvas></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="card-h"><h2>Uji sensitivitas parameter proses</h2><p>Penurunan scrap area pilot (loop berpusat manusia) pada nilai rendah, dasar, dan tinggi tiap parameter. Parameter proses adalah ilustratif; temuannya mekanisme.</p></div>
+      <div class="tablewrap" id="tSens"></div>
+    </div>
+  </section>
+
+  <!-- ============================================================ SIMULATOR -->
+  <section data-tab="simulator" hidden>
+    <div class="layout">
+      <aside class="panel" aria-label="Panel kendali system dynamics">
+        <div class="ctl">
+          <span class="lab">Kebijakan</span>
+          <div class="seg" id="policy" role="group" aria-label="Kebijakan">
+            <button type="button" data-v="do_nothing">Tanpa tindakan</button><button type="button" data-v="tech_only">Beli teknologi</button>
+            <button type="button" data-v="people_only">SDM saja</button><button type="button" data-v="clk_v1">CLK v1</button><button type="button" data-v="clk_v2">CLK v2</button>
+          </div>
+          <small id="policyNote"></small>
         </div>
-        <div class="chartbox"><canvas id="cCost" aria-label="Grafik indeks biaya konversi 2023 sampai 2035"></canvas></div>
-        <details><summary>Lihat tabel</summary><div class="tablewrap"><table id="tCost"></table></div></details>
-      </section>
-
-      <section class="grid3" aria-label="Indikator pendukung">
-        <div class="panel"><div class="card-h"><h3>Indeks scrap (2023 = 100)</h3></div><div class="chartbox sm"><canvas id="cScrap"></canvas></div></div>
-        <div class="panel"><div class="card-h"><h3>Waktu engineer untuk perbaikan</h3></div><div class="chartbox sm"><canvas id="cTime"></canvas></div></div>
-        <div class="panel"><div class="card-h"><h3>Engineer Software &amp; AI di L3+</h3></div><div class="chartbox sm"><canvas id="cSkill"></canvas></div></div>
-      </section>
-
-      <section class="grid2" aria-label="Ekonomi dan gate">
+        <div class="ctl"><label for="capex">Investasi program <span class="val" id="capexV"></span></label><input type="range" id="capex" min="40" max="120" step="5"><small>Rentang casebook Rp40–120 M. Program SDM saja memakai Rp12 M tetap.</small></div>
+        <div class="ctl"><label for="adopt">Adopsi yang terealisasi <span class="val" id="adoptV"></span></label><input type="range" id="adopt" min="0.2" max="1" step="0.05"><small>Porsi efek desain tiap tuas yang tercapai. Monte Carlo memakai 60–100%; di bawah 60% = loop gagal.</small></div>
+        <div class="ctl"><label for="trhc">Target kepatuhan alert <span class="val" id="trhcV"></span></label><input type="range" id="trhc" min="0.7" max="0.95" step="0.01"><small>Hari ini 69% (31% alert diabaikan, Ex.6B).</small></div>
+        <div class="ctl"><label for="protect">Waktu perbaikan dilindungi <span class="val" id="protectV"></span></label><input type="range" id="protect" min="0" max="0.4" step="0.05"><small>Berlaku untuk SDM saja dan CLK v2. Rencana: 30% + ratchet.</small></div>
+        <div class="ctl"><label for="cplx">Kenaikan kompleksitas varian setelah 2025 <span class="val" id="cplxV"></span></label><input type="range" id="cplx" min="0" max="0.0625" step="0.003125"><small>2023–25 naik 6,25%/thn (Ex.4: 8 → 9 bulan). Juga mengubah jalur tanpa tindakan.</small></div>
+        <div class="ctl"><span class="lab">Mulai program</span><div class="seg" id="delay" role="group" aria-label="Mulai program"><button type="button" data-v="0">Q4 2026</button><button type="button" data-v="1">Q4 2027</button><button type="button" data-v="2">Q4 2028</button></div></div>
+        <div class="ctl"><span class="lab">Pola belanja</span><div class="seg" id="phasing" role="group" aria-label="Pola belanja"><button type="button" data-v="light">Pilot-light 10/15/40/25/10</button><button type="button" data-v="front">Di awal 30/35/25/10/0</button></div></div>
+        <label class="toggle"><input type="checkbox" id="gate"> Gate go/no-go akhir 2027</label>
+        <label class="toggle"><input type="checkbox" id="stop2031"> Hentikan program 2031 (uji ketahanan)</label>
+        <button type="button" class="reset" id="reset">Kembali ke rencana dasar</button>
+      </aside>
+      <div class="stack">
+        <div class="tiles" id="tiles"></div>
         <div class="panel">
-          <div class="card-h"><h2>Arus kas program</h2><p>Penghematan vs tanpa tindakan, dikurangi investasi dan biaya berjalan (Rp miliar). Setelah 2030 termasuk penggantian teknologi 1/5 per tahun.</p></div>
-          <div class="chartbox sm"><canvas id="cCash"></canvas></div>
+          <div class="card-h"><h2>Indeks biaya konversi, harga konstan 2025</h2><div class="legend" id="legCost"></div></div>
+          <div class="chartbox"><canvas id="cCost" aria-label="Grafik indeks biaya konversi 2023 sampai 2035"></canvas></div>
+          <details><summary>Lihat tabel</summary><div class="tablewrap"><table id="tCost"></table></div></details>
         </div>
-        <div class="panel">
-          <div class="card-h"><h2>Gate akhir 2027</h2><p>Skala hanya bila semua kriteria terpenuhi; bila tidak, belanja berikutnya ditahan.</p></div>
-          <div class="gate" id="gateBox"></div>
+        <div class="grid3">
+          <div class="panel"><div class="card-h"><h3>Indeks scrap (2023 = 100)</h3></div><div class="chartbox sm"><canvas id="cScrap"></canvas></div></div>
+          <div class="panel"><div class="card-h"><h3>Waktu engineer untuk perbaikan</h3></div><div class="chartbox sm"><canvas id="cTime"></canvas></div></div>
+          <div class="panel"><div class="card-h"><h3>Engineer Software &amp; AI di L3+</h3></div><div class="chartbox sm"><canvas id="cSkill"></canvas></div></div>
         </div>
-      </section>
+        <div class="grid2">
+          <div class="panel"><div class="card-h"><h2>Arus kas program</h2><p>Penghematan vs tanpa tindakan, dikurangi investasi dan biaya berjalan (Rp miliar). Setelah 2030 termasuk penggantian teknologi.</p></div><div class="chartbox sm"><canvas id="cCash"></canvas></div></div>
+          <div class="panel"><div class="card-h"><h2>Gate akhir 2027</h2><p>Skala hanya bila semua kriteria terpenuhi; bila tidak, belanja berikutnya ditahan.</p></div><div class="gate" id="gateBox"></div></div>
+        </div>
+        <div class="panel"><div class="card-h"><h2>Semua kebijakan pada asumsi ini</h2><p>Lima kebijakan dijalankan dengan asumsi panel yang sama.</p></div><div class="tablewrap"><table id="tPol"></table></div></div>
+      </div>
+    </div>
+  </section>
 
-      <section class="grid2" aria-label="Keberlanjutan">
+  <!-- ============================================================ FINANSIAL -->
+  <section data-tab="finansial" hidden>
+    <div class="layout">
+      <aside class="panel" aria-label="Asumsi model finansial">
+        <div class="ctl"><span class="lab">Skenario</span><div class="seg" id="fScen" role="group" aria-label="Skenario"><button type="button" data-v="konservatif">Konservatif</button><button type="button" data-v="dasar">Dasar</button><button type="button" data-v="optimis">Optimis</button></div><small>Mengisi semua tuas dengan nilai skenario di model spreadsheet.</small></div>
+        <div class="ctl"><label for="fScrap">Penurunan biaya scrap <span class="val" id="fScrapV"></span></label><input type="range" id="fScrap" min="0" max="0.6" step="0.05"><small>Simulasi: −85% di area loop × 40% cakupan ≈ −34%.</small></div>
+        <div class="ctl"><label for="fMaint">Penurunan biaya perawatan <span class="val" id="fMaintV"></span></label><input type="range" id="fMaint" min="0" max="0.25" step="0.01"><small>McKinsey: −18–25%.</small></div>
+        <div class="ctl"><label for="fNva">Waktu NVA operator dihilangkan <span class="val" id="fNvaV"></span></label><input type="range" id="fNva" min="0" max="0.6" step="0.05"><small>Persen dari 22% jam kerja (Ex.4).</small></div>
+        <div class="ctl"><label for="fEnergy">Penurunan biaya energi <span class="val" id="fEnergyV"></span></label><input type="range" id="fEnergy" min="0" max="0.14" step="0.01"><small>Nissan AS: +13,8% kinerja energi dalam 3 tahun.</small></div>
+        <div class="ctl"><label for="fVar">Penurunan biaya modifikasi varian <span class="val" id="fVarV"></span></label><input type="range" id="fVar" min="0" max="0.7" step="0.05"><small>Virtual commissioning −40% s.d. −70%.</small></div>
+        <div class="ctl"><label for="fCapex">Investasi <span class="val" id="fCapexV"></span></label><input type="range" id="fCapex" min="40" max="120" step="5"></div>
+        <div class="ctl"><label for="fRun">Biaya berjalan (% investasi kumulatif) <span class="val" id="fRunV"></span></label><input type="range" id="fRun" min="0.05" max="0.15" step="0.01"></div>
+        <div class="ctl"><label for="fTrain">Pelatihan &amp; perubahan per tahun <span class="val" id="fTrainV"></span></label><input type="range" id="fTrain" min="1" max="5" step="0.5"></div>
+        <div class="ctl"><label for="fLabor">Porsi tenaga kerja dalam biaya konversi <span class="val" id="fLaborV"></span></label><input type="range" id="fLabor" min="0.35" max="0.45" step="0.01"><small>Asumsi tim; casebook hanya menyebut komponennya.</small></div>
+        <div class="ctl"><label for="fCash">Waktu operator yang menjadi kas <span class="val" id="fCashV"></span></label><input type="range" id="fCash" min="0.3" max="0.7" step="0.05"><small>Sisanya dialihkan ke kaizen (tanpa PHK).</small></div>
+        <div class="ctl"><span class="lab">Pola belanja</span><div class="seg" id="fPhase" role="group" aria-label="Pola belanja finansial"><button type="button" data-v="light">Pilot-light</button><button type="button" data-v="front">Di awal</button></div></div>
+        <div class="ctl"><span class="lab">Penghematan</span><div class="seg" id="fDelay" role="group" aria-label="Keterlambatan penghematan"><button type="button" data-v="0">Sesuai rencana</button><button type="button" data-v="1">Terlambat 1 tahun</button></div></div>
+      </aside>
+      <div class="stack">
+        <div class="tiles" id="finTiles"></div>
         <div class="panel">
-          <div class="card-h"><h2>CO₂ dihindari (ton per tahun)</h2><p>Dari loop energi, vs tanpa tindakan. Grid Jamali 0,80 tCO₂/MWh; tarif PLN I-3 Rp1.114,74/kWh; 70% biaya energi listrik (asumsi).</p></div>
-          <div class="chartbox sm"><canvas id="cCo2"></canvas></div>
+          <div class="card-h"><h2>Penghematan bruto per tuas</h2><div class="legend" id="legFin"></div></div>
+          <div class="chartbox"><canvas id="cFin"></canvas></div>
+          <details><summary>Lihat arus kas per tahun</summary><div class="tablewrap"><table id="tFin"></table></div></details>
         </div>
-        <div class="panel">
-          <div class="card-h"><h2>Semua kebijakan pada asumsi ini</h2><p>Lima kebijakan dijalankan dengan asumsi panel yang sama.</p></div>
-          <div class="tablewrap"><table id="tPol"></table></div>
+        <div class="grid2">
+          <div class="panel"><div class="card-h"><h2>Tiga skenario</h2><p>Nilai tuas dan investasi skenario model spreadsheet.</p></div><div class="tablewrap" id="tScen"></div></div>
+          <div class="panel"><div class="card-h"><h2>Break-even</h2><p>Penghematan tahun pertama yang dibutuhkan agar NPV = 0 (faktor PV anuitas tumbuh 4%, diskonto 10%, 5 tahun).</p></div><div class="tablewrap" id="tBreak"></div></div>
         </div>
-      </section>
+        <div class="panel"><div class="card-h"><h2>Tornado model finansial</h2><p>NPV dasar saat satu input digeser ke nilai rendah dan tinggi (dari <span class="num">model/run_tests.py</span>).</p></div><div class="chartbox"><canvas id="cTornXl"></canvas></div></div>
+      </div>
+    </div>
+  </section>
 
-      <section class="panel" aria-labelledby="h-mc">
-        <div class="card-h">
-          <h2 id="h-mc">Uji stres: 1.500 simulasi per strategi</h2>
-          <p>Hasil tetap dari Monte Carlo Python (18 input segitiga). Garis = P5 sampai P95 NPV 2026–2030, titik = median, kanan = peluang NPV &gt; 0.</p>
-        </div>
-        <div class="range" id="mcBox"></div>
-        <p class="note" style="margin-top:12px">Model finansial spreadsheet (10.000 simulasi): pilot-light + gate <span class="num" id="xlPlan"></span>, tanpa gate <span class="num" id="xlNoGate"></span>, belanja di awal tanpa gate <span class="num" id="xlFront"></span>, terlambat 1 tahun <span class="num" id="xlLate"></span>.</p>
-      </section>
+  <!-- ============================================================ STRES -->
+  <section data-tab="stres" class="stack" hidden>
+    <div class="panel">
+      <div class="card-h"><h2>Model system dynamics: 1.500 simulasi per strategi</h2><p>18 input segitiga, termasuk uji kegagalan loop. Garis = P5 sampai P95 NPV 2026–2030, titik = median, kanan = peluang NPV &gt; 0.</p></div>
+      <div class="range" id="mcBox"></div>
+    </div>
+    <div class="panel">
+      <div class="card-h"><h2>Model finansial: 10.000 simulasi per strategi</h2><p>13 input segitiga; gate berhenti bila adopsi pilot &lt; 80% (terjadi di <span class="num" id="xlGate"></span> simulasi).</p></div>
+      <div class="range" id="xlBox"></div>
+    </div>
+    <div class="grid2">
+      <div class="panel"><div class="card-h"><h2>Tornado system dynamics</h2><p>NPV CLK v2 saat satu input digeser ke nilai rendah dan tinggi.</p></div><div class="chartbox"><canvas id="cTornSd"></canvas></div></div>
+      <div class="panel">
+        <div class="card-h"><h2>Apa artinya</h2></div>
+        <ul class="note" style="display:grid;gap:8px;padding-left:18px;margin:0">
+          <li><strong>Kecepatan menentukan</strong> di kedua model: terlambat satu tahun menurunkan peluang NPV positif ke 21–32%.</li>
+          <li><strong>Pilot-light adalah asuransi.</strong> Belanja di awal lebih untung bila loop berhasil; bila gagal, pilot-light menjaga peluang NPV positif di 90% vs 60%.</li>
+          <li><strong>Perlindungan waktu</strong> memotong NPV jangka pendek sedikit, tetapi tanpa itu gate salah menghentikan program yang berhasil di 46% simulasi (vs 22%).</li>
+          <li>Kedua model berbeda soal belanja di awal karena hanya system dynamics yang mengaitkan cakupan loop dengan belanja.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
 
-      <footer class="foot">
-        <p><strong>Cara membaca.</strong> NPV dihitung terhadap jalur tanpa tindakan, yang terus memburuk seperti 2023–2025. Terhadap kinerja yang dibekukan di 2025, NPV jauh lebih rendah; keduanya ditampilkan di kartu NPV.</p>
-        <p><strong>Batas model.</strong> Dikalibrasi pada dua titik data dummy (galat &lt; 3%). Lantai masalah 85% dan batas produktivitas 2× menahan hasil di bawah benchmark eksternal. Volume tetap 175.000 unit; porsi komponen biaya adalah asumsi tim.</p>
-        <p>Sumber: casebook M3C 2026 (Exhibit 1–9), <span class="num">model/sd_model.py</span>, <span class="num">model/run_tests.py</span>, <span class="num">work/5_tests.md</span>.</p>
-      </footer>
-    </main>
-  </div>
+  <!-- ============================================================ KEBERLANJUTAN -->
+  <section data-tab="keberlanjutan" class="stack" hidden>
+    <div class="tiles" id="susTiles"></div>
+    <div class="grid2">
+      <div class="panel"><div class="card-h"><h2>CO₂ dihindari (ton per tahun)</h2><p>Loop energi vs tanpa tindakan. Grid Jamali 0,80 tCO₂/MWh; tarif PLN I-3 Rp1.114,74/kWh; 70% biaya energi listrik (asumsi).</p></div><div class="chartbox sm"><canvas id="cCo2"></canvas></div></div>
+      <div class="panel"><div class="card-h"><h2>Ketahanan hasil sampai 2035</h2><div class="legend"><span><i class="sw" style="border-color:var(--series-1)"></i>Cara kerja dipertahankan</span><span><i class="sw dash" style="border-color:var(--series-2)"></i>Program dihentikan 2031</span><span><i class="sw" style="border-color:var(--baseline)"></i>Tanpa tindakan</span></div></div><div class="chartbox sm"><canvas id="cDur"></canvas></div></div>
+    </div>
+    <div class="panel"><div class="card-h"><h2>Dampak sosial: orang dan pengetahuan</h2><p>Model system dynamics, skenario CLK v2. Ketergantungan pada senior dan waktu hingga mandiri diturunkan dari know-how (dikalibrasi ke Ex.6A).</p></div><div class="tablewrap" id="tSocial"></div></div>
+  </section>
+
+  <!-- ============================================================ ROADMAP -->
+  <section data-tab="roadmap" class="stack" hidden>
+    <div class="panel"><div class="card-h"><h2>Fase, pemilik, dan kriteria lanjut</h2><p>Hanya 25% investasi dikeluarkan sebelum gate akhir 2027.</p></div><div class="tablewrap" id="tPhase"></div></div>
+    <div class="panel"><div class="card-h"><h2>Gate go/no-go akhir 2027</h2><p>Program diskalakan hanya bila semua kriteria terpenuhi.</p></div><div class="tablewrap" id="tGate"></div></div>
+    <div class="panel"><div class="card-h"><h2>Seratus hari pertama</h2><p>Hanya aset yang sudah dimiliki TMMIN.</p></div><div class="tablewrap" id="tDays"></div></div>
+    <div class="grid2">
+      <div class="panel"><div class="card-h"><h2>Rencana kapabilitas</h2></div><div class="tablewrap" id="tCap"></div></div>
+      <div class="panel"><div class="card-h"><h2>Bangun sendiri vs bermitra</h2></div><div class="tablewrap" id="tBuild"></div></div>
+    </div>
+    <div class="panel"><div class="card-h"><h2>Risk register</h2><p>Skor = peluang × dampak (1–5 masing-masing).</p></div><div class="tablewrap" id="tRisk"></div></div>
+  </section>
+
+  <!-- ============================================================ KPI -->
+  <section data-tab="kpi" class="stack" hidden>
+    <div class="panel"><div class="card-h"><h2>KPI hasil</h2><p>Kolom gate 2027 sama dengan kriteria gate di roadmap.</p></div><div class="tablewrap" id="tKpiO"></div></div>
+    <div class="panel"><div class="card-h"><h2>KPI pendorong: orang, pengetahuan, adopsi</h2></div><div class="tablewrap" id="tKpiD"></div></div>
+    <div class="grid2">
+      <div class="panel"><div class="card-h"><h2>KPI keberlanjutan</h2></div><div class="tablewrap" id="tKpiS"></div></div>
+      <div class="panel"><div class="card-h"><h2>Koreksi terbuka terhadap draf</h2><p>Target yang diturunkan agar konsisten dengan model.</p></div><div class="tablewrap" id="tKpiF"></div></div>
+    </div>
+  </section>
+
+  <!-- ============================================================ Q&A -->
+  <section data-tab="qa" class="stack" hidden>
+    <div class="panel">
+      <div class="card-h"><h2>Tiga pertanyaan tersulit: jawaban lisan 20 detik</h2></div>
+      <div id="spoken" style="display:grid;gap:14px"></div>
+    </div>
+    <div class="panel">
+      <div class="card-h"><h2>Bank Q&amp;A (20 pertanyaan)</h2><p>Cari kata kunci, misalnya "gate", "pesaing", atau "CO₂".</p></div>
+      <input type="search" id="qaSearch" placeholder="Cari pertanyaan atau jawaban" aria-label="Cari Q&amp;A">
+      <div id="qaList" style="display:grid;gap:6px;margin-top:12px"></div>
+    </div>
+    <div class="panel">
+      <div class="card-h"><h2>Serangan panel juri per sudut pandang</h2><p>Serangan yang ditandai fatal oleh dua lensa wajib mengubah jawaban.</p></div>
+      <div id="lenses" style="display:grid;gap:10px"></div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <p><strong>Cara membaca.</strong> NPV system dynamics dihitung terhadap jalur tanpa tindakan, yang terus memburuk seperti 2023–2025. Terhadap kinerja yang dibekukan di 2025, NPV jauh lebih rendah; keduanya ditampilkan.</p>
+    <p><strong>Batas model.</strong> Model system dynamics dikalibrasi pada dua titik data dummy (galat &lt; 3%); lantai masalah 85% dan batas produktivitas 2× menahan hasil di bawah benchmark eksternal. Volume tetap 175.000 unit; porsi komponen biaya adalah asumsi tim. Model di browser diperiksa sama dengan model Python sebelum halaman dibangun.</p>
+    <p>Sumber: casebook M3C 2026 (Exhibit 1–9), <span class="num">model/sd_model.py</span>, <span class="num">model/build_model.py</span>, <span class="num">model/run_tests.py</span>, <span class="num">work/</span>.</p>
+  </footer>
 </div>
 <div class="tip" id="tip" hidden></div>
 
@@ -440,16 +643,92 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); margin-
 
 </script>
 <script>
-const DATA = {"params":{"phi":1.07,"p_min":0.85,"x_cap":2.0,"gen0":0.20431929297728857,"cplx_pre":0.0625,"cplx_post":0.03125,"std_prevent":0.2,"unserved_gen":0.5,"phi_ff":1.0,"recur":0.8,"r0":0.62,"r_exp":0.5,"other":0.1,"k_routine":0.6,"tool_routine":0.15,"r_floor":0.45,"r_cap":0.75,"i_norm":0.3,"erode":3.499204562676823,"build":0.4,"q_floor":0.5,"q_max":1.3,"tools_gain":0.5,"vis_gain":0.5,"idea_gain":0.25,"kc":0.16032634982138916,"k_decay":0.1,"k_std_gain":1.5,"sprint":0.12,"p12":0.35667494393873245,"p23":0.2231435513142097,"partner_build":0.15,"build_per_eng":0.06,"tr0":0.69,"tr_hc":0.9,"tr_tau":0.75,"fatigue":0.15,"scope":0.4,"loop_eff":0.939,"esc_eff":0.95,"cam_scrap":0.117,"cam_esc":0.667,"dt_red":0.25,"maint_var":0.3,"nva_red":0.3,"cash_conv":0.5,"e_red":0.05,"var_red":0.35,"var_projects":3.0,"var_cost":10.0,"adopt":1.0,"capex":80.0,"run_pct":0.1,"training":2.5,"tariff":1114.74,"elec_share":0.7,"grid_ef":0.8,"carbon_tax":30.0},"mc":{"CLK v2, pilot-light + gate":{"p_pos":0.9373333333333334,"p5":-1.8523686933504038,"p50":20.781257052916963,"p95":40.66368510363942,"gate_stop":0.224},"CLK v2, pilot-light, no gate":{"p_pos":0.8726666666666667,"p5":-7.6687823105823085,"p50":16.32680391349328,"p95":40.4577689391083,"gate_stop":0.0},"CLK v2, front-loaded + gate":{"p_pos":0.994,"p5":15.28234193189122,"p50":41.822820333668766,"p95":70.8452699305224,"gate_stop":0.224},"CLK v2, front-loaded, no gate":{"p_pos":0.9833333333333333,"p5":10.373183987829567,"p50":40.03809205361773,"p95":70.88158630605338,"gate_stop":0.0},"FAILURE (adoption 20-60%): pilot-light + gate":{"p_pos":0.89625,"p5":-2.3097420682123384,"p50":9.453927841578802,"p95":22.454945482892605,"gate_stop":1.0},"FAILURE (adoption 20-60%): front-loaded + gate":{"p_pos":0.60125,"p5":-18.765477297081276,"p50":3.276592951678138,"p95":25.814144747360668,"gate_stop":1.0},"CLK v1 (no protected time) + gate":{"p_pos":0.9733333333333334,"p5":5.5131668046648485,"p50":27.320212346800428,"p95":43.31876708288614,"gate_stop":0.462},"CLK v2 protecting 40% + gate":{"p_pos":0.9106666666666666,"p5":-4.513614587610503,"p50":19.5385286332373,"p95":40.47885347635861,"gate_stop":0.224},"CLK v2, 1 year late + gate":{"p_pos":0.208,"p5":-30.00217605187422,"p50":-11.640156079199565,"p95":7.111079552654751,"gate_stop":0.22733333333333333},"Buy technology only":{"p_pos":0.0,"p5":-89.49100851539293,"p50":-87.80444232268222,"p95":-86.06234467000272,"gate_stop":0.0}},"xl":{"pPlan":0.86,"pNoGate":0.73,"pFront":0.49,"pLate":0.32}};
-(function () {
-  const M = window.SDModel;
-  const P0 = DATA.params;
-  const DEF = { policy: "clk_v2", capex: 80, adopt: 1.0, trhc: 0.90, protect: 0.30, cplx: 0.03125, delay: 0, phasing: "light", gate: true, stop2031: false };
-  let st = { ...DEF };
-  try { const s = JSON.parse(localStorage.getItem("clk-sim") || "null"); if (s) st = { ...DEF, ...s }; } catch (e) {}
-  const save = () => { try { localStorage.setItem("clk-sim", JSON.stringify(st)); } catch (e) {} };
+// JavaScript port of the spreadsheet financial model (model/build_model.py, Model tab),
+// so the dashboard can recompute NPV as levers move. check_parity.js asserts it matches
+// model/run_tests.py (base NPV, run-rate) and the documented scenario NPVs.
+(function (root) {
+  const BASE = {
+    units: 175000, unitCost: 3.2, disc: 0.10, esc: 0.04, life: 5, idx2025: 106, bench2025: 89,
+    split: { labor: 0.40, energy: 0.12, maint: 0.13, dep: 0.25, scrap: 0.10 },
+    nva: 0.22, months: 9, varProjects: 3, varCost: 10, cashConv: 0.50,
+    ramp: [0.10, 0.35, 0.65, 0.90, 1.00],
+  };
+  const PHASING = { light: [0.10, 0.15, 0.40, 0.25, 0.10], front: [0.30, 0.35, 0.25, 0.10, 0.0] };
+  const SCEN = {
+    konservatif: { scrap: 0.20, maint: 0.05, nvaCut: 0.15, energy: 0.02, variant: 0.20, capex: 110, runPct: 0.10, training: 3.0 },
+    dasar: { scrap: 0.35, maint: 0.10, nvaCut: 0.30, energy: 0.05, variant: 0.35, capex: 80, runPct: 0.10, training: 2.5 },
+    optimis: { scrap: 0.50, maint: 0.15, nvaCut: 0.45, energy: 0.08, variant: 0.50, capex: 60, runPct: 0.08, training: 2.0 },
+  };
 
+  function irr(flows) {
+    if (!(Math.min(...flows) < 0 && Math.max(...flows) > 0)) return null;
+    const f = (r) => flows.reduce((a, c, k) => a + c / Math.pow(1 + r, k + 1), 0);
+    let lo = -0.99, hi = 10;
+    if (f(lo) * f(hi) > 0) return null;
+    for (let i = 0; i < 200; i++) { const m = (lo + hi) / 2; if (f(lo) * f(m) <= 0) hi = m; else lo = m; }
+    return (lo + hi) / 2;
+  }
+
+  // lv: { scrap, maint, nvaCut, energy, variant, capex, runPct, training, phasing, laborShare, cashConv, delay }
+  function run(lv) {
+    const b = BASE;
+    const conv = b.units * b.unitCost / 1000;                 // Rp B (Ex.9: ~560)
+    const labor = lv.laborShare ?? b.split.labor;
+    const cash = lv.cashConv ?? b.cashConv;
+    const phasing = PHASING[lv.phasing || "light"];
+    const delay = lv.delay || 0;                              // savings ramp shifted later, spend unchanged
+    const ramp = b.ramp.map((_, i) => (i - delay >= 0 ? b.ramp[i - delay] : 0));
+    const lever = {
+      scrap: conv * b.split.scrap * lv.scrap,
+      maint: conv * b.split.maint * lv.maint,
+      labor: conv * labor * b.nva * lv.nvaCut * cash,
+      energy: conv * b.split.energy * lv.energy,
+      variant: b.varProjects * b.varCost * lv.variant,
+    };
+    const runRate = Object.values(lever).reduce((a, v) => a + v, 0);
+    const rows = [];
+    let cumInv = 0, cum = 0, payback = null;
+    for (let i = 0; i < 5; i++) {
+      const escF = Math.pow(1 + b.esc, i);
+      const by = Object.fromEntries(Object.entries(lever).map(([k, v]) => [k, v * ramp[i] * escF]));
+      const sav = Object.values(by).reduce((a, v) => a + v, 0);
+      const inv = lv.capex * phasing[i];
+      cumInv += inv;
+      const runC = cumInv * lv.runPct + lv.training;
+      const net = sav - inv - runC;
+      const pv = net / Math.pow(1 + b.disc, i + 1);
+      cum += net;
+      if (payback === null && cum >= 0) payback = 2026 + i;
+      rows.push({ year: 2026 + i, ...by, sav, inv, run: runC, net, pv, cum });
+    }
+    const npv = rows.reduce((a, r) => a + r.pv, 0);
+    const idx = b.idx2025 * (1 - runRate / conv);
+    const gapClosed = (b.idx2025 - idx) / (b.idx2025 - b.bench2025);
+    const residual = rows.reduce((a, r, i) => a + r.inv * ((i + 1 - 0.5) / b.life), 0) / Math.pow(1 + b.disc, b.life);
+    return { conv, lever, runRate, rows, npv, npvResidual: npv + residual, irr: irr(rows.map((r) => r.net)), payback,
+      idx, gapClosed, months: b.months * (1 - lv.variant) };
+  }
+
+  function breakEven(invest) {
+    const b = BASE, conv = b.units * b.unitCost / 1000;
+    let pvf = 0;
+    for (let t = 1; t <= 5; t++) pvf += Math.pow(1 + b.esc, t - 1) / Math.pow(1 + b.disc, t);
+    const gapRp = (b.idx2025 - b.bench2025) / b.idx2025 * conv;
+    const first = invest / pvf;
+    return { pvf, first, pctConv: first / conv, shareGap: first / gapRp, gapRp };
+  }
+
+  root.FinModel = { run, breakEven, SCEN, PHASING, BASE };
+  if (typeof module !== "undefined") module.exports = root.FinModel;
+})(typeof window !== "undefined" ? window : globalThis);
+
+</script>
+<script>
+const DATA = {"sd":{"params":{"phi":1.07,"p_min":0.85,"x_cap":2.0,"gen0":0.20431929297728857,"cplx_pre":0.0625,"cplx_post":0.03125,"std_prevent":0.2,"unserved_gen":0.5,"phi_ff":1.0,"recur":0.8,"r0":0.62,"r_exp":0.5,"other":0.1,"k_routine":0.6,"tool_routine":0.15,"r_floor":0.45,"r_cap":0.75,"i_norm":0.3,"erode":3.499204562676823,"build":0.4,"q_floor":0.5,"q_max":1.3,"tools_gain":0.5,"vis_gain":0.5,"idea_gain":0.25,"kc":0.16032634982138916,"k_decay":0.1,"k_std_gain":1.5,"sprint":0.12,"p12":0.35667494393873245,"p23":0.2231435513142097,"partner_build":0.15,"build_per_eng":0.06,"tr0":0.69,"tr_hc":0.9,"tr_tau":0.75,"fatigue":0.15,"scope":0.4,"loop_eff":0.939,"esc_eff":0.95,"cam_scrap":0.117,"cam_esc":0.667,"dt_red":0.25,"maint_var":0.3,"nva_red":0.3,"cash_conv":0.5,"e_red":0.05,"var_red":0.35,"var_projects":3.0,"var_cost":10.0,"adopt":1.0,"capex":80.0,"run_pct":0.1,"training":2.5,"tariff":1114.74,"elec_share":0.7,"grid_ef":0.8,"carbon_tax":30.0},"mc":{"CLK v2, pilot-light + gate":{"p_pos":0.9373333333333334,"p5":-1.8523686933504038,"p50":20.781257052916963,"p95":40.66368510363942,"gate_stop":0.224},"CLK v2, pilot-light, no gate":{"p_pos":0.8726666666666667,"p5":-7.6687823105823085,"p50":16.32680391349328,"p95":40.4577689391083,"gate_stop":0.0},"CLK v2, front-loaded + gate":{"p_pos":0.994,"p5":15.28234193189122,"p50":41.822820333668766,"p95":70.8452699305224,"gate_stop":0.224},"CLK v2, front-loaded, no gate":{"p_pos":0.9833333333333333,"p5":10.373183987829567,"p50":40.03809205361773,"p95":70.88158630605338,"gate_stop":0.0},"FAILURE (adoption 20-60%): pilot-light + gate":{"p_pos":0.89625,"p5":-2.3097420682123384,"p50":9.453927841578802,"p95":22.454945482892605,"gate_stop":1.0},"FAILURE (adoption 20-60%): front-loaded + gate":{"p_pos":0.60125,"p5":-18.765477297081276,"p50":3.276592951678138,"p95":25.814144747360668,"gate_stop":1.0},"CLK v1 (no protected time) + gate":{"p_pos":0.9733333333333334,"p5":5.5131668046648485,"p50":27.320212346800428,"p95":43.31876708288614,"gate_stop":0.462},"CLK v2 protecting 40% + gate":{"p_pos":0.9106666666666666,"p5":-4.513614587610503,"p50":19.5385286332373,"p95":40.47885347635861,"gate_stop":0.224},"CLK v2, 1 year late + gate":{"p_pos":0.208,"p5":-30.00217605187422,"p50":-11.640156079199565,"p95":7.111079552654751,"gate_stop":0.22733333333333333},"Buy technology only":{"p_pos":0.0,"p5":-89.49100851539293,"p50":-87.80444232268222,"p95":-86.06234467000272,"gate_stop":0.0}},"tornado":[{"name":"capex","lo":2.9338164343263955,"hi":50.45373248576351},{"name":"cplx_post","lo":20.405198159266167,"hi":42.30087165685106},{"name":"nva_red","lo":21.32180498003747,"hi":40.082689612729936},{"name":"var_red","lo":25.080915230758542,"hi":37.81061689961878},{"name":"scope","lo":25.111809502197726,"hi":37.77972262817965},{"name":"adopt","lo":20.749974088916588,"hi":31.445766065188657},{"name":"sprint","lo":26.045417046915286,"hi":35.79410233447829},{"name":"idea_gain","lo":26.371072319310496,"hi":36.019977790388594},{"name":"dt_red","lo":26.780855242217594,"hi":36.1106768881598},{"name":"build_per_eng","lo":23.197645132631067,"hi":31.445766065188657},{"name":"tools_gain","lo":27.48156395929589,"hi":34.806172277612255},{"name":"cash_conv","lo":28.19681651752831,"hi":34.69471561284917},{"name":"e_red","lo":28.369839224010793,"hi":34.521692906366376},{"name":"vis_gain","lo":28.142097086294253,"hi":34.24387284351367},{"name":"unserved_gen","lo":29.230906449204536,"hi":32.690295119104626},{"name":"tr_hc","lo":33.418089264847524,"hi":35.37780163633198},{"name":"k_std_gain","lo":30.76753908209652,"hi":32.0817618910105},{"name":"build","lo":31.139913044930687,"hi":31.69388324408423}],"social":{"2025":{"digital_l3":2.0,"know_how":0.3142766282787956,"senior_dep":0.49126450511369857,"ramp_months":15.21120947088185,"routine":0.6611471405199858,"improve":0.23885285948001422,"ideas":0.5894927906677716},"2030":{"digital_l3":13.591383291837483,"know_how":0.6427966752322947,"senior_dep":0.2559068595350724,"ramp_months":10.798253616282608,"routine":0.4896636654372297,"improve":0.4103363345627704,"ideas":2.9538106502512798},"2035":{"digital_l3":22.10713563028186,"know_how":0.8104399947595718,"senior_dep":0.13580418285881418,"ramp_months":8.546328428602767,"routine":0.45,"improve":0.45,"ideas":3.4714285714285715}}},"xl":{"npv":27.01,"runRate":48.1,"sim":[{"label":"Today: visual at final inspection, manual feedback","scrap_red":0.0,"esc_red":0.0},{"label":"Better camera at end-of-line only (tech, no loop)","scrap_red":-0.117,"esc_red":0.667},{"label":"Closed loop at sealer, 31% of alerts dismissed (as today)","scrap_red":0.667,"esc_red":0.682},{"label":"Closed loop with people-centred design (10% dismissed)","scrap_red":0.847,"esc_red":0.862}],"sens":[{"name":"AI camera coverage of defect modes","points":[[0.5,0.825],[0.7,0.847],[0.9,0.867]]},{"name":"Drift defect rate","points":[[0.1,0.803],[0.25,0.848],[0.4,0.865]]},{"name":"Units between drift events","points":[[2500,0.863],[5000,0.858],[10000,0.834]]},{"name":"Late-found scrap share","points":[[0.15,0.831],[0.3,0.854],[0.5,0.85]]},{"name":"Units from sealer to today's inspection","points":[[100,0.811],[300,0.849],[600,0.874]]}],"dismiss":[[0.0,0.939],[0.1,0.845],[0.2,0.75],[0.31,0.643],[0.5,0.496]],"strategies":[{"id":"A","label":"Front-loaded phasing, no gate","p5":-32.83,"p50":-0.37,"p95":32.5,"prob_pos":0.49,"mean":-0.19},{"id":"B","label":"Front-loaded phasing + gate (65% already spent)","p5":-39.75,"p50":-2.96,"p95":32.4,"prob_pos":0.45,"mean":-3.8},{"id":"C","label":"Pilot-light phasing, no gate (as in Model tab)","p5":-19.41,"p50":11.71,"p95":43.1,"prob_pos":0.73,"mean":11.82},{"id":"D","label":"Pilot-light phasing + gate","p5":-8.41,"p50":13.32,"p95":43.07,"prob_pos":0.86,"mean":15.05},{"id":"E","label":"D + remaining equipment life valued at book","p5":6.48,"p50":36.96,"p95":67.48,"prob_pos":0.99,"mean":36.01},{"id":"F","label":"D but savings ramp one year slower (stress test)","p5":-31.9,"p50":-5.54,"p95":12.33,"prob_pos":0.32,"mean":-7.53},{"id":"G","label":"F + remaining equipment life valued at book","p5":-3.78,"p50":11.93,"p95":35.12,"prob_pos":0.88,"mean":13.43}],"tornado":[{"name":"Investment (Rp B)","lo":-1.5,"hi":46.0},{"name":"Adoption achieved","lo":-18.0,"hi":27.0},{"name":"Scrap reduction","lo":7.4,"hi":46.7},{"name":"Variant projects / yr","lo":18.8,"hi":43.4},{"name":"Cost per variant project","lo":14.7,"hi":39.3},{"name":"Variant cost reduction","lo":16.5,"hi":37.5},{"name":"Operator NVA eliminated","lo":18.4,"hi":35.7},{"name":"Maintenance reduction","lo":18.5,"hi":35.5},{"name":"Energy reduction","lo":22.3,"hi":31.7},{"name":"Running cost %","lo":23.8,"hi":30.2}],"gateStop":0.2466},"ex":{"1":[["Metrik","2024","2025","Perubahan"],["Wholesales (unit)","865.723","803.687","−7,2%"],["Retail sales (unit)","889.680","833.692","−6,3%"]],"2":[["Fasilitas","Lokasi","Sejak","Produksi","Kapasitas/tahun"],["Sunter I","Jakarta Utara","1973","Mesin TR dan mesin etanol","195.000 unit"],["Sunter II","Jakarta Utara","1977","Press parts dan casting","96.000 unit press parts; 10.000 ton casting"],["Karawang I","Karawang","1998","Perakitan kendaraan (IMV)","130.000 unit"],["Karawang II","Karawang","2013","Perakitan kendaraan penumpang","120.000 unit"],["Karawang III","Karawang","2016","Casting, machining, perakitan mesin R-NR","216.000 unit"]],"3":[["Tahun","TMMIN","Pemain baru"],["2023","100","94"],["2024","103","91"],["2025","106","89"]],"4":[["Metrik","2023","2025"],["Scrap (indeks)","100","108"],["Unplanned downtime (indeks)","100","111"],["Cacat lolos ke proses hilir (indeks)","100","103"],["Waktu non-value-added operator (% jam kerja)","20","22"],["Modifikasi peralatan untuk varian baru (bulan)","8","9"]],"5":[["Proses","Level","Kondisi"],["Press shop","3","Ganti die dan cek kualitas panel masih oleh operator"],["Casting","2","Finishing, handling, inspeksi sebagian manual"],["Machining & engine assembly","3","Perakitan dan inspeksi sebagian manual"],["Body welding: spot welding","3","Robot terprogram, terintegrasi"],["Body welding: sealer","2","Manual/semi-otomatis; belum ada umpan balik kualitas otomatis"],["Painting","3","Cek kualitas dan perbaikan cacat masih visual manual"],["Final assembly","2","Sebagian besar manual; variasi varian ditangani operator"],["Quality inspection","1","Visual manual; kamera AI dari CCTV validasi s.d. Okt 2026"],["Intralogistics","2","Forklift dan dolly manual; uji AGV/AMR di area pilot"],["Maintenance","2","Preventif berkala, belum prediktif"],["Equipment & system integration","2","Point-to-point, tanpa standar antarmuka"],["Data integration","1","Data peralatan, kualitas, logistik tidak terhubung"]],"6A":[["Metrik","2023","2025"],["Waktu engineer untuk dukungan rutin & troubleshooting (%)","62","65"],["Waktu engineer untuk perbaikan & pengembangan baru (%)","28","25"],["Know-how kritis terdokumentasi (% item)","35","33"],["Proses kritis yang bergantung pada 1–2 senior (%)","45","48"],["Waktu engineer baru hingga mandiri (bulan)","14","15"],["Ide perbaikan per engineer per tahun","3,1","2,4"],["Ide yang diimplementasikan (% dari yang diajukan)","35","28"]],"6B":[["Indikator","Persentase"],["Teknologi membantu, bukan menggantikan","54%"],["Sudah dilatih alat berbasis data","18%"],["Sering mengabaikan alert otomatis","31%"],["Know-how dibagi lewat coaching informal","71%"],["Mau menyumbang ide bila ada kanal mudah","62%"]],"7":[["Bidang","Level 1","Level 2","Level 3","Level 4"],["Mechanical","3","8","14","5"],["Electrical","5","10","11","4"],["PLC","7","11","9","3"],["Programming","14","10","5","1"],["Software & AI","20","8","2","0"]],"8":[["Pathway","2026","2030 moderat","2030 agresif"],["ICE","70%","45%","30%"],["HEV","25%","38%","40%"],["PHEV","3%","7%","10%"],["BEV","2%","10%","20%"],["Total elektrifikasi","30%","55%","70%"]],"9":[["Parameter","Nilai"],["Kapasitas terpasang Karawang I & II","250.000 unit/tahun"],["Utilisasi 2025","70% (~175.000 unit)"],["Biaya konversi per unit 2025","Rp3,2 juta (tenaga kerja, energi, perawatan, depresiasi, scrap)"],["Total biaya konversi 2025","~Rp560 miliar"],["Rentang investasi program 3–5 tahun","Rp40–120 miliar"],["Tingkat diskonto","10%/tahun"],["Umur ekonomis teknologi","5 tahun"],["Eskalasi biaya tenaga kerja & energi","4%/tahun"]]},"diag":{"procs":{"Press shop":[3,2,2,2],"Casting":[2,2,2,1],"Machining & engine assembly":[3,2,2,2],"Spot welding":[3,1,1,2],"Sealer":[2,3,3,1],"Painting":[3,2,3,1],"Final assembly":[2,3,2,3],"Quality inspection":[1,3,3,1],"Intralogistics":[2,3,1,2],"Maintenance":[2,3,1,1],"Equipment & system integr.":[2,2,1,3],"Data integration":[1,2,2,3]},"top3":{"Press shop":0,"Casting":0,"Machining & engine assembly":0,"Spot welding":0,"Sealer":6,"Painting":0,"Final assembly":21,"Quality inspection":27,"Intralogistics":0,"Maintenance":0,"Equipment & system integr.":0,"Data integration":27},"bridge":{"esc":4.243200000000006,"scrap":0.8000000000000007,"nva":1.025641025641031,"maintHi":1.4300000000000013,"driftLo":1.8256410256410318,"driftHi":3.255641025641033},"shareTmmin":0.5159859260139685,"widen":5.5,"impl":[1.085,0.672]},"score":{"criteria":[["cq","Dampak biaya & kualitas",0.2],["lr","Menaikkan laju belajar",0.15],["fx","Fleksibilitas multi-pathway",0.15],["pk","Manusia & pengetahuan",0.15],["hc","Sulit dibeli/ditiru",0.1],["fe","Layak Rp40-120 M & 2026-2030",0.15],["fit","Sesuai casebook (bukan alat)",0.1]],"options":{"CLK v2 (A+B+C+D+E+H+I+J+K+L)":[5,5,4,5,5,3,5],"A Closed-Loop Jidoka":[5,3,2,3,4,4,5],"B Plug-and-Produce":[3,3,5,2,5,3,4],"C Citizen AI Tools":[3,4,3,5,4,4,5],"D Shop-Floor O-Beya":[2,4,2,5,4,5,4],"E Simulation-First":[2,3,5,2,4,3,4],"F Conveyor-less + AMR":[3,1,5,1,2,1,1],"G Predictive Maintenance":[4,2,1,3,2,4,3],"H Firefighting Firewall":[2,5,1,4,4,5,5],"I Operator Idea Engine":[2,4,1,5,3,5,4],"J Learning-Rate Governance":[2,4,2,2,3,5,4],"K Digital Skill Academy":[1,3,3,5,3,5,3],"L Energy Data Loop":[2,2,1,2,3,5,4]},"rank1":{"CLK v2 (A+B+C+D+E+H+I+J+K+L)":0.8963,"A Closed-Loop Jidoka":0.005,"B Plug-and-Produce":0.0131,"C Citizen AI Tools":0.0031,"D Shop-Floor O-Beya":0.02865,"E Simulation-First":0.0,"F Conveyor-less + AMR":0.0,"G Predictive Maintenance":0.0,"H Firefighting Firewall":0.05085,"I Operator Idea Engine":0.0,"J Learning-Rate Governance":0.0,"K Digital Skill Academy":0.003,"L Energy Data Loop":0.0},"pcrit":[["imp","Dampak (heat map Stage 2)",0.25],["sig","Sinyal jelas & terukur",0.2],["rdy","Aset sudah ada",0.15],["spd","Terbukti sebelum gate 2027",0.2],["rsk","Risiko orang & lingkup (5=rendah)",0.1],["yok","Bisa disalin (yokoten)",0.1]],"pilots":{"Sealer -> inspeksi":[4,5,5,5,4,4],"Final assembly -> inspeksi":[5,3,3,2,2,4],"Painting -> inspeksi":[3,3,3,3,4,3],"Maintenance (data mesin)":[3,4,2,3,4,4],"Intralogistics -> final assembly":[3,3,3,3,3,3]},"pilotRank1":{"Sealer -> inspeksi":0.99045,"Final assembly -> inspeksi":0.00955,"Painting -> inspeksi":0.0,"Maintenance (data mesin)":0.0,"Intralogistics -> final assembly":0.0}},"road":{"phases":[["Fase","Periode","Investasi","Pemilik","Deliverable","Kriteria lanjut"],["0. Persiapan","Q4 2026","10% (Rp8 M)","Pilot lead: Manajer Body Shop (welding & sealer)","Loop sealer berjalan di kamera CCTV tervalidasi, satu shift; draf standar data v0.1; kanal ide satu ketukan aktif; aturan waktu perbaikan 30% berlaku di area pilot; kohort akademi 1 dimulai","Loop berjalan dan terukur sebelum 31 Des 2026"],["1. Pilot","2027","15% (Rp12 M)","Pilot lead + Pemilik standar data","Loop tertutup di semua shift; 3 alat buatan operator/engineer; 20 item know-how kritis ditangkap dan ditautkan ke standard work; papan abnormalitas team leader","Gate akhir 2027 (bagian 3)"],["2. Standardisasi","2028","40% (Rp32 M)","Pemilik program: Kepala Production Engineering","Yokoten ke final assembly → inspeksi (gelombang 1, Stage 4) dan painting → inspeksi; standar data wajib untuk semua peralatan baru; data mesin masuk ke loop","Standar terbukti di minimal 2 area tambahan; KPI pilot bertahan"],["3. Roll-out","2029","25% (Rp20 M)","Pemilik program","Seluruh lini kendaraan Karawang I & II; retrofit peralatan lama sesuai prioritas; data energi per mesin ke team leader","Roll-out sesuai anggaran; kepatuhan alert ≥ 85% di semua lini"],["4. Skala","2030","10% (Rp8 M)","Pemilik program + Pemilik standar data","Pabrik mesin Karawang III; perubahan varian lewat konfigurasi; akademi diajar oleh engineer L3 sendiri","Target KPI 2030 (Stage 7)"],["5. Pelihara","2031+","Penggantian teknologi sekitar Rp16 M/tahun (1/5 per tahun, umur 5 tahun Ex.9)","Direktur Produksi (sponsor)","Standar dan rutinitas loop diaudit tahunan; akademi berjalan sendiri; aturan ratchet tetap berlaku","Indeks biaya tidak naik kembali (peringatan dini: waktu perbaikan < 40%)"]],"gate":[["#","Kriteria","Ambang","Baseline","Dasar"],["1","Penurunan scrap di area pilot (sealer → inspeksi)","≥ 60%","0%","Desain loop 85% (simulasi sealer); 60% = desain × adopsi 80% × kepatuhan 80%"],["2","Operator yang mengabaikan alert","≤ 20%","31% (Ex.6B)","Kepatuhan ≥ 80%"],["3","Adopsi pilot (alert yang ditindaklanjuti sesuai aturan stop/koreksi/eskalasi)","≥ 80%","—","Gate model/run_tests.py"],["4","Loop berjalan di semua shift area pilot; area kedua siap","Ya","Tidak","Cakupan ≥ 15% lini di sd_model.py"],["5","Ide terimplementasi per engineer (laju tahunan)","≥ 0,75","0,67 (Ex.6A)","Bukti bahwa jebakan firefighting mulai terbalik"],["6","Waktu engineer untuk perbaikan di area pilot","≥ 30%","25% (Ex.6A)","Norma kapabilitas"]],"days":[["Hari","Fokus","Aksi","Pemilik"],["1–30","Lihat","Genchi genbutsu di sealer → inspeksi bersama operator; baseline scrap, cacat lolos, dan alert yang diabaikan per shift; tetapkan pemilik standar data; luncurkan kanal ide; umumkan aturan waktu perbaikan 30%","Pilot lead"],["31–60","Hubungkan","Sambungkan kamera AI tervalidasi ke alert di stasiun sealer dan andon digital; rancang aturan alert bersama team leader (alert menjelaskan alasannya); sprint pertama penangkapan know-how dengan senior sealer","Pemilik standar data + team leader"],["61–100","Jalankan","Loop berjalan di satu shift, lalu semua shift; kaizen mingguan untuk setiap alert yang diabaikan; kohort akademi 1 membangun alat pertamanya; laporan KPI mingguan ke sponsor","Pilot lead + People lead"]],"capability":[["Siapa","Belajar apa","Seberapa cepat","Bagaimana pengetahuan ditangkap"],["Engineer (30 per bidang, Ex.7)","Software & AI: dari L1/L2 ke L3 lewat kohort berjenjang; setiap kohort membangun satu alat nyata di pilot","L1→L2 30%/tahun, L2→L3 20%/tahun; L3+ dari 2 menjadi 13,6 pada akhir 2030 (sd_model.py; spreadsheet sekitar 14)","Kode dan model disimpan di platform internal dengan dokumentasi standar; engineer L3 mengajar mulai 2029"],["Operator","Membaca dan menindaklanjuti alert; mencatat ide; alat berbasis data sederhana","Terlatih dari 18% ke 50% (2027) dan 90% (2030)","Alert yang diabaikan menjadi input kaizen; ide kecil langsung dieksekusi team leader"],["Team leader","Menyetel aturan alert; memimpin kaizen harian; papan abnormalitas","Seluruh team leader area pilot pada 2027","Aturan alert adalah bagian standard work"],["Senior (pemilik know-how kritis)","Menjadi validator, bukan satu-satunya sumber jawaban","Sprint terjadwal; 12% dari know-how yang belum terdokumentasi per tahun","Wawancara berbantuan AI, divalidasi ahli, ditautkan ke standard work (O-Beya lantai pabrik)"]],"build":[["Komponen","Pilihan","Alasan"],["Logika loop dan aturan alert","Bangun","Know-how inti, terikat ke standard work"],["Standar antarmuka dan data pabrik","Bangun","Kepemilikan inilah yang memangkas bulan per varian"],["Model inspeksi AI","Bangun","Melanjutkan kamera CCTV in-house"],["Peralatan dan fixture standar","Bangun","Lebih murah, fleksibel, memakai engineer sendiri"],["Komputasi dan cloud","Mitra","Komoditas"],["Pembangunan loop pertama di pilot","Mitra, sementara","sd_model.py mengasumsikan dukungan mitra hanya selama pilot; setelah itu laju rollout bergantung pada engineer L3+ sendiri"],["Sensor canggih, proses baterai","Mitra","Teknologi khusus"]],"risks":[["Risiko","Peluang (1–5)","Dampak (1–5)","Skor","Mitigasi","Indikator peringatan dini","Pemilik"],["Penghematan terlambat (pilot lambat dimulai)","3","5","15","100 hari pertama dengan aset yang ada; tinjauan KPI mingguan","Loop belum berjalan 31 Des 2026","Pilot lead"],["Operator tidak percaya atau mengabaikan alert","4","5","20","Alert dirancang bersama team leader dan menjelaskan alasannya; setiap pengabaian dibahas di kaizen","Tingkat pengabaian alert (31% hari ini)","Team leader"],["Loop tidak berhasil di konteks TMMIN (adopsi rendah)","2","5","10","Pilot-light + gate: 75% belanja ditahan","Scrap pilot < 60% pada Q3 2027","Controller (gate)"],["Kinerja memburuk dulu sebelum membaik (waktu perbaikan dilindungi saat firefighting masih tinggi)","3","3","9","Perlindungan hanya pada norma 30%, naik bertahap dalam 6 bulan; kapasitas firefighting cadangan di 2027","Masalah tidak tertangani > 15% (sd_model.py: puncak sekitar 11% pada Q2 2027)","Pemilik program"],["Rollout tertahan karena engineer L3+ kurang","4","4","16","Akademi mulai Q4 2026; mitra hanya untuk pilot dengan transfer pengetahuan","Engineer L3+ < 4 di akhir 2027 (rencana 4,9)","People lead"],["Integrasi peralatan lama sulit","4","4","16","Standar wajib untuk peralatan baru; retrofit bertahap","Porsi peralatan pilot pada standar","Pemilik standar data"],["Kompleksitas varian naik lebih cepat dari asumsi","3","3","9","Standar data mengubah varian menjadi konfigurasi; justru menaikkan nilai program (tornado: NPV naik)","Jumlah varian baru per tahun","Pemilik program"],["Keuntungan hilang setelah 2030 (standar tidak dipelihara)","3","4","12","Fase 5: audit tahunan, penggantian teknologi dianggarkan, ratchet tetap berlaku","Waktu perbaikan < 40%; indeks biaya naik 2 kuartal berturut-turut","Sponsor"],["Senior tidak punya waktu berbagi know-how","3","3","9","Sprint terlindungi; pengakuan; wawancara berbantuan AI","Porsi know-how terdokumentasi","People lead"],["Kamera AI gagal validasi Oktober 2026","2","4","8","Andon digital dan cek operator sementara model dilatih ulang","Akurasi validasi terhadap ambang","Pemilik standar data"]]},"kpi":{"outcome":[["KPI","Baseline","Gate 2027 (area pilot)","Pabrik 2027 (model)","Target 2030","Tanpa tindakan 2030","Sumber target"],["Indeks biaya konversi, harga konstan 2025 (skala Ex.3)","106 (Ex.3)","—","109,2","≤ 101 (spreadsheet: 96,9)","113,9","SD 100,8 sebagai target; spreadsheet sebagai potensi atas"],["Laju belajar: perubahan indeks biaya per tahun","+3 poin/tahun (Ex.3, 2023–25)","Berhenti naik","+0,6 (lalu turun sejak 2028)","≤ −3 poin/tahun (2029–30)","+1,2/tahun","SD"],["Indeks scrap (2023 = 100)","108 (Ex.4)","−60% di area pilot","117","78","131","SD"],["Indeks cacat lolos ke hilir","103 (Ex.4)","—","103","73","111","SD"],["Indeks unplanned downtime","111 (Ex.4)","—","126","90","145","SD"],["Waktu NVA operator","22% (Ex.4)","—","24%","17%","28%","SD (spreadsheet: −30% = 15,4%)"],["Bulan modifikasi peralatan per varian","9 (Ex.4)","—","9,3","7,2","10,4","SD, termasuk kompleksitas yang naik (spreadsheet tanpa kenaikan kompleksitas: 5,9)"],["Selisih ke pemain baru, nominal (poin)","17 (Ex.3)","—","—","25 vs 89 tetap; 38 vs benchmark bergerak","40 / 52","SD"]],"driver":[["KPI","Baseline","Gate 2027","Target 2030","Sumber target"],["Operator yang mengabaikan alert","31% (Ex.6B)","≤ 20%","10%","SD (kepatuhan 90%)"],["Adopsi pilot (alert ditindaklanjuti sesuai aturan)","—","≥ 80%","≥ 90%","Gate spreadsheet"],["Waktu engineer untuk perbaikan","25% (Ex.6A)","≥ 30%","41%","SD (draf lama: 45%)"],["Ide terimplementasi per engineer per tahun","0,67 (Ex.6A)","≥ 0,75","≥ 2,4 (median 2,7–3,0)","SD; Monte Carlo P(≥ 2,4) = 65%"],["Know-how kritis terdokumentasi","33% (Ex.6A)","39%","64%","SD (draf lama: 83%; SD mencapai 81% pada 2035)"],["Proses kritis bergantung 1–2 senior","48% (Ex.6A)","—","26%","SD"],["Engineer baru hingga mandiri","15 bulan (Ex.6A)","—","11 bulan","SD 10,8 (draf lama: 9)"],["Engineer Software & AI L3+ (dari 30)","2 (Ex.7)","4,9","13,6","SD dan spreadsheet (~14)"],["Operator terlatih alat berbasis data","18% (Ex.6B)","50%","90%","Target rencana (tidak dimodelkan)"],["Cakupan loop kualitas (lini kendaraan)","0%","18%","94%","SD"],["Proses pada standar data bersama","0%","14%","75%","SD (draf lama: 80%)"]],"sustain":[["KPI","Baseline","Target 2030","Sumber"],["CO₂ dihindari dari loop energi","0","1.765 t/tahun (kumulatif 3.709 t 2026–30)","SD; grid Jamali 0,80 tCO₂/MWh"],["Listrik dihemat","0","2.206 MWh/tahun","SD; tarif PLN I-3"],["Scrap (limbah material) vs tanpa tindakan","—","−40%","SD"],["PHK akibat program","—","0: 50% waktu operator yang dibebaskan dialihkan ke kaizen","Asumsi kedua model"],["Ketahanan: indeks biaya 2035, harga konstan 2025","—","≤ 99 bila cara kerja dipertahankan (105 bila dihentikan)","SD"]],"fixes":[["KPI","Draf lama","Konsisten dengan model","Mengapa berubah"],["Indeks biaya 2027","102","Area pilot −60% scrap; pabrik 109,2 (harga konstan 2025)","Penghematan datang setelah kemerosotan dihentikan"],["Indeks biaya 2030","96,9","≤ 101 (spreadsheet 96,9 sebagai potensi atas)","Program harus menghentikan kemerosotan dulu"],["Indeks scrap 2030","75","78","Cakupan loop dibatasi kapabilitas engineer"],["Cacat lolos 2030","60","73","Loop hanya menjangkau 40% sumber scrap"],["Downtime 2030","75","90","Penurunan downtime dijaga di bawah benchmark"],["Know-how 2030","83%","64%","Know-how juga usang 10% per tahun karena varian baru"],["Ide per engineer 2030","4,3 (diajukan)","≥ 2,4 terimplementasi","Diukur sebagai ide terimplementasi agar sejalan dengan Ex.6A"],["Bulan per varian 2030","5,9","7,2","Model memasukkan kompleksitas yang naik seiring elektrifikasi (Ex.8)"]]},"qa":{"bank":[["#","Pertanyaan","Jawaban singkat","Bukti","Pemilik"],["1","Apa bedanya ini dengan membeli kamera AI dan sistem MES?","Teknologi saja menemukan cacat lebih banyak tetapi terlambat, sehingga scrap naik 12% di simulasi sealer dan indeks scrap 2030 menjadi 144 vs 131 tanpa tindakan. Yang kami ubah adalah ke mana sinyal pergi dan siapa yang bertindak.","Slide 11–12; [SIM]; [SD]","M2"],["2","Mengapa mulai di sealer, bukan final assembly yang dampaknya lebih besar?","Final assembly memang skor dampaknya tertinggi, tetapi sealer satu-satunya proses yang disebut casebook tanpa umpan balik kualitas otomatis, sinyalnya paling jelas, dan kameranya sudah ada. Sealer menang di 99% kombinasi bobot; final assembly menjadi gelombang pertama 2028.","Lampiran A3; work/4_scoring.md §5","M2"],["3","Dari mana angka 97–101?","Spreadsheet (tuas × adopsi) memberi 96,9; model system dynamics, yang harus lebih dulu menghentikan kemerosotan, memberi 100,8. Keduanya pada harga konstan 2025, dibanding sekitar 114 bila tanpa tindakan.","Slide 2, 18; [XL]; [SD]","M3"],["4","Bagaimana jika tanpa program pun kinerja TMMIN tidak memburuk?","Maka NPV 2026–30 negatif (−Rp65,4 M) dan program baru positif dalam 10 tahun (+Rp17,0 M). Tetapi 13 dari 13 indikator memburuk dalam dua tahun terakhir, jadi asumsi \"tidak memburuk\" bertentangan dengan data.","Lampiran A4; Stage 2","M3"],["5","Pesaing terus turun. Apakah selisih benar-benar tertutup?","Tidak pada 2030, dan kami tidak mengklaimnya. Terhadap benchmark yang terus turun, program menghapus 28% selisih dibanding tanpa tindakan, dan pelebaran selisih melambat dari 6,7 menjadi 1,7 poin per tahun. Menutup sisanya butuh gelombang perbaikan berikutnya serta tuas di luar cara memproduksi (utilisasi 70%, depresiasi).","Slide 18; [SD]","M3"],["6","Mengapa tidak belanja lebih cepat bila hasilnya lebih besar?","Bila loop berhasil, belanja di awal memang lebih bernilai (P50 Rp41,8 M vs Rp20,8 M). Tetapi bila loop gagal, pilot-light menjaga P(NPV>0) di 90% vs 60%. Kami membayar premi asuransi itu secara sadar, dan boleh mempercepat setelah gate bila kriteria terlampaui.","Slide 19; [SD]","M3"],["7","Apa yang terjadi jika pilot terlambat?","Ini risiko terbesar: peluang NPV positif turun ke 21–32%. Karena itu 100 hari pertama hanya memakai kamera, operator, dan team leader yang sudah ada.","Slide 16, 19","M2"],["8","Bagaimana gate bekerja dan siapa yang memutuskan?","Enam kriteria di akhir 2027, termasuk scrap pilot −60%, pengabaian alert ≤ 20%, dan ide terimplementasi ≥ 0,75 per engineer. Controller keuangan menilainya secara independen dari tim pilot; bila gagal, 75% belanja ditahan.","Slide 15, 21; work/6_roadmap.md §3","M2"],["9","Mengapa gate tidak lebih awal, misalnya pertengahan 2027?","Kami mengujinya: KPI orang butuh sekitar 15 bulan untuk terbaca, sehingga gate pertengahan 2027 menghentikan program yang sebenarnya berhasil (NPV 10 tahun turun dari Rp265 M ke Rp209 M).","work/5_tests.md §8","M3"],["10","Apakah melindungi 30% waktu engineer tidak mengganggu produksi?","Kami menguji 0–40%. Melindungi 35–40% sejak awal memang mengganggu dan memotong NPV, jadi kami melindungi norma 30%, naik bertahap dalam 6 bulan, lalu mengunci waktu yang dibebaskan loop. Tanpa perlindungan, gate salah menghentikan program di 46% simulasi (vs 22%).","Slide 13; [SD]","M1"],["11","Realistiskah engineer Software & AI mahir dari 2 menjadi 14?","Laju akademi (30% L1→L2 dan 20% L2→L3 per tahun) membawa angka ke 13,6 pada 2030. Fondasi mechanical/electrical sudah kuat (63% dan 50% di L3+). Laju ini juga yang membatasi rollout di model: bila lebih lambat, penghematan ikut lambat dan terlihat di gate.","Slide 17; Ex.7; [SD]","M1"],["12","Bagaimana mengubah mindset operator yang mengabaikan 31% alert?","Alert dirancang bersama team leader dan menjelaskan alasannya, setiap pengabaian dibahas di kaizen, dan 62% operator sudah mau menyumbang ide bila kanalnya mudah. Kepercayaan bernilai rupiah: dari 31% ke 10% pengabaian, manfaat scrap naik dari 64% ke 85%.","Ex.6B; [SIM]","M1"],["13","Apakah program ini mengurangi tenaga kerja?","Tidak. Hanya 50% waktu operator yang dibebaskan dihitung sebagai kas; sisanya dialihkan ke kaizen dan menyerap volume.","Lampiran A2","M1"],["14","Apa dampak keberlanjutannya?","Sekitar 1.765 t CO₂ per tahun dihindari pada 2030 (15.214 t kumulatif sampai 2035), scrap −40% vs tanpa tindakan, ketergantungan pada senior turun dari 48% ke 26%. Dampak CO₂-nya kecil; manfaat lingkungan terbesar adalah material yang tidak terbuang.","Slide 20; [SD]","M3"],["15","Apakah hasilnya bertahan setelah 2030?","Hanya bila cara kerja dipertahankan. Bila program dihentikan 2031, indeks 2035 naik ke 105,2 vs 98,4. Karena itu ada Fase 5 dengan anggaran penggantian teknologi sekitar Rp16 M per tahun.","Slide 20; [SD]","M2"],["16","Mengapa investasi Rp80 M, bukan Rp40 M atau Rp120 M?","Rp80 M di tengah rentang casebook. Investasi adalah input paling berpengaruh di kedua tornado. Pada skenario konservatif (Rp110 M dengan tuas rendah), NPV menjadi −Rp55,4 M, dan itulah alasan gate ada.","Slide 18; tornado","M3"],["17","Data Exhibit 3–9 adalah dummy. Seberapa bisa dipercaya?","Kesimpulan kami adalah mekanisme dan desain kebijakan yang tahan uji, bukan ramalan TMMIN. Setiap angka bisa dijalankan ulang dari skrip, dan model menolak berjalan bila tidak cocok dengan exhibit.","Lampiran A1","M3"],["18","Apa yang dibangun sendiri dan apa yang dibeli?","Logika loop, standar data, model AI, dan fixture dibangun sendiri karena itulah pembeda. Komputasi dan sensor khusus dari mitra, dengan transfer pengetahuan sebagai syarat pembayaran akhir.","Slide 17","M2"],["19","Bagaimana ini membantu multi-pathway (HEV, PHEV, BEV)?","Standar data mengubah varian baru menjadi konfigurasi: bulan per varian menjadi 7,2 pada 2030, dibanding 10,4 bila kompleksitas naik tanpa tindakan. Makin agresif elektrifikasi, makin bernilai programnya.","Ex.8; [SD]","M2"],["20","Apa satu hal yang paling mungkin membuat ini gagal?","Kecepatan dan kepercayaan operator. Keduanya diukur sejak hari pertama dan menjadi kriteria gate.","Slide 16, 21","M1"]],"lenses":{"Lensa 1 — Asumsi (assumption audit)":[["#","Serangan","Tingkat","Bukti yang sudah ada","Perbaikan"],["1.1","NPV bergantung pada asumsi bahwa tanpa program kinerja terus memburuk","Fatal","13 dari 13 indikator memburuk 2023–25 (Stage 2). Terhadap baseline beku 2025: NPV 2026–30 −Rp65,4 M, 2026–35 +Rp17,0 M [SD]","Tampilkan kedua baseline secara terbuka (slide 18, lampiran A4); jangan hanya menyajikan angka vs tanpa tindakan"],["1.2","Porsi komponen biaya konversi tidak ada di casebook","Serius","Asumsi sama di kedua model; porsi tenaga kerja diuji 35–45% (spreadsheet Monte Carlo)","Sebutkan sebagai asumsi di lampiran; usulkan klarifikasi ke panitia"],["1.3","Kepatuhan alert 90% terlalu optimis","Serius","Simulasi sealer: pada 31% pengabaian manfaat masih 64%; Monte Carlo SD memakai 78–95%","Kepatuhan menjadi kriteria gate (≤ 20% pengabaian)"],["1.4","Kalibrasi system dynamics hanya pada dua titik data dummy","Serius","Model menolak berjalan bila kalibrasi meleset > 3%","Posisikan SD sebagai pembanding kebijakan, bukan peramal; angka utama finansial dari spreadsheet"],["1.5","Laju akademi 30%/20% per tahun belum terbukti","Serius","Rollout di SD dibatasi jumlah engineer L3+, sehingga laju lebih lambat langsung terlihat sebagai penghematan yang lebih lambat","Peringatan dini: L3+ < 4 di akhir 2027"]],"Lensa 2 — Pasar dan pesaing (war game)":[["#","Serangan","Tingkat","Bukti","Perbaikan"],["2.1","Pesaing terus turun; selisih tidak benar-benar tertutup","Fatal bila disembunyikan","Terhadap benchmark yang bergerak (ilustrasi ~76 pada 2030), selisih nominal CLK v2 37,6 poin vs 52,0 tanpa tindakan; 28% selisih dihapus [SD]","Klaim kami adalah laju: pelebaran selisih melambat dari 6,7 menjadi 1,7 poin per tahun (2028–30), dan pada harga konstan indeks turun ≥ 3 poin per tahun. Kami tidak mengklaim menutup selisih terhadap pesaing yang terus turun. Sisa selisih juga ada di luar manufaktur (utilisasi 70%, depresiasi). Disajikan terbuka di slide 18"],["2.2","Porsi elektrifikasi mencapai 70% (skenario agresif)","Minor","Tornado SD: kompleksitas lebih tinggi justru menaikkan NPV (Rp20,4 M → Rp42,3 M), karena tanpa tindakan memburuk lebih cepat","Jadikan argumen: makin banyak varian, makin bernilai standar data"],["2.3","Volume turun lagi","Serius","Kedua model memakai volume tetap 175.000 unit (Ex.9)","Akui. Break-even hanya butuh 22% selisih tertutup, sehingga ada ruang sebelum NPV negatif"],["2.4","Pesaing meniru","Minor","Opsi yang mudah dibeli diberi skor rendah (Stage 4); nilai CLK ada di cara kerja dan kapabilitas","Slide 8 dan 14"]],"Lensa 3 — Eksekusi dan uang (risk and mitigation)":[["#","Serangan","Tingkat","Bukti","Perbaikan"],["3.1","Pilot terlambat; penghematan datang setahun kemudian","Fatal bila tidak dijawab","P(NPV>0) turun ke 32% [XL] dan 21% [SD]","100 hari pertama hanya dengan aset yang ada; loop sealer berjalan sebelum 31 Des 2026 (slide 16)"],["3.2","Melindungi waktu perbaikan membuat firefighting tidak tertangani","Serius","SD: perlindungan 35–40% memotong NPV; desain akhir melindungi norma 30% dengan kenaikan bertahap; masalah tidak tertangani memuncak sekitar 11% pada Q2 2027","Sudah diubah di desain; peringatan dini > 15%"],["3.3","Gate tidak menangkap kegagalan, atau malah menghentikan program yang berhasil","Serius","Gate pertengahan 2027 menghentikan program yang berhasil; gate akhir 2027 berhenti di 22% simulasi; bila loop gagal, gate berhenti di 100% simulasi","Gate akhir 2027 dengan enam kriteria terukur (Stage 6)"],["3.4","Kamera AI gagal validasi Oktober 2026","Minor","Loop tidak bergantung pada satu sensor","Andon digital dan cek operator sementara"],["3.5","Keuntungan hilang setelah program selesai","Serius","Program dihentikan 2031: indeks 2035 105,2 vs 98,4 [SD]","Fase 5 \"Pelihara\" masuk roadmap dengan anggaran penggantian teknologi"]],"Lensa 4 — Cerita (narrative)":[["#","Serangan","Tingkat","Bukti","Perbaikan"],["4.1","Dua model memberi dua angka; juri bingung","Serius","96,9 vs 100,8; NPV 27 vs 31","Sajikan sebagai rentang dengan satu kalimat alasan: system dynamics lebih konservatif karena kemerosotan harus dihentikan dulu"],["4.2","\"Pabrik yang belajar\" terdengar abstrak","Serius","Contoh sealer 5 langkah","Setiap slide konsep diikuti contoh sealer"],["4.3","Ringkasan eksekutif terlalu banyak angka","Minor","—","Tiga angka saja (slide 2)"],["4.4","Kesannya ini proyek teknologi","Minor","Teknologi saja: NPV −Rp87,8 M dan scrap naik [SD]; simulasi +12%","Slide 11–12 diletakkan sebelum angka finansial"]]},"tally":[["Serangan","Lensa yang menandai fatal","Yang sudah diubah"],["NPV hanya positif terhadap baseline yang memburuk (1.1, juga 4.1)","Asumsi, Cerita","Angka utama disajikan sebagai rentang dua model; baseline beku ditampilkan sebagai batas bawah; NPV 10 tahun vs baseline beku (+Rp17,0 M) ditambahkan"],["Kecepatan (3.1) dan pesaing yang bergerak (2.1)","Eksekusi, Pasar","Laju belajar menjadi KPI utama; benchmark bergerak ditampilkan; 100 hari pertama dan gate akhir 2027 dikunci"]],"spoken":[{"q":"Q4 — \"Tanpa program pun mungkin tidak memburuk.\"","a":"Kami juga menghitung skenario itu. Bila kinerja 2025 bisa dibekukan tanpa usaha, program kami baru balik modal dalam sepuluh tahun, bukan lima. Tetapi data casebook menunjukkan ketiga belas indikator internal memburuk dalam dua tahun. Membekukan 2025 bukan pilihan yang tersedia. Pilihannya: terus merosot, atau mengubah cara pabrik belajar."},{"q":"Q5 — \"Pesaing terus bergerak; selisihnya tidak tertutup.\"","a":"Benar, dan kami tidak mengklaim menutupnya pada 2030. Hari ini selisih melebar hampir 7 poin per tahun bila tidak ada tindakan; dengan program, pelebarannya turun ke kurang dari 2 poin. Itu langkah pertama: pabrik yang kembali belajar. Menutup sisanya butuh gelombang perbaikan berikutnya, dan tuas di luar cara memproduksi seperti utilisasi."},{"q":"Q6 — \"Kalau belanja di awal lebih menguntungkan, kenapa tidak?\"","a":"Karena kami belum tahu apakah loop akan berhasil di TMMIN. Bila berhasil, belanja di awal lebih untung. Bila gagal, pilot-light menjaga peluang NPV positif di 90%, sedangkan belanja di awal hanya 60%. Kami membayar premi asuransi itu secara sadar, dan gate memberi izin untuk mempercepat begitu buktinya ada."}]}};
+(function () {
+  const M = window.SDModel, F = window.FinModel;
   const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const idn = (x, d = 1) => {
     if (x === null || x === undefined || Number.isNaN(x)) return "–";
     const s = Math.abs(x).toFixed(d).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, ".");
@@ -458,17 +737,161 @@ const DATA = {"params":{"phi":1.07,"p_min":0.85,"x_cap":2.0,"gen0":0.20431929297
   const pct = (x, d = 0) => idn(x * 100, d) + "%";
   const rp = (x, d = 1) => (x < 0 ? "−Rp" + idn(-x, d) : "Rp" + idn(x, d)) + " M";
   const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-  const NOTES = {
-    do_nothing: "Jalur pembanding: pabrik terus memburuk seperti 2023–2025.",
-    tech_only: "Kamera dan integrasi oleh vendor di akhir lini, tanpa loop dan tanpa program SDM.",
-    people_only: "Akademi, kanal ide, sprint know-how, dan waktu dilindungi; tanpa loop data.",
-    clk_v1: "Tiga loop dengan alert berpusat manusia, tanpa perlindungan waktu.",
-    clk_v2: "Rencana: tiga loop + waktu perbaikan dilindungi dan ratchet.",
-  };
-
-  function params() {
-    return { ...P0, adopt: st.adopt, tr_hc: st.trhc, cplx_post: st.cplx, capex: st.capex };
+  const store = { get(k, d) { try { const v = JSON.parse(localStorage.getItem(k) || "null"); return v ?? d; } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
+  const tile = (k, v, d, pill = "") => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div>${pill}<div class="d">${d}</div></div>`;
+  function mdTable(rows, numCols = []) {
+    const [head, ...body] = rows;
+    return `<table><tr>${head.map((h, i) => `<th class="${numCols.includes(i) ? "n" : ""}">${esc(h)}</th>`).join("")}</tr>` +
+      body.map((r) => `<tr>${r.map((c, i) => `<td class="${numCols.includes(i) ? "n" : ""}">${esc(c)}</td>`).join("")}</tr>`).join("") + "</table>";
   }
+
+  // ---------------------------------------------------------------- charts
+  const charts = {};
+  function baseOpts(yFmt, yMin, yMax, extra = {}) {
+    const ink = css("--muted"), grid = css("--grid");
+    return {
+      responsive: true, maintainAspectRatio: false, animation: { duration: 250 }, layout: { padding: { left: 14, right: 6 } },
+      interaction: { mode: "index", intersect: false },
+      plugins: { legend: { display: false },
+        tooltip: { backgroundColor: css("--ink"), titleColor: css("--bg"), bodyColor: css("--bg"), padding: 9,
+          titleFont: { family: "IBM Plex Mono" }, bodyFont: { family: "IBM Plex Sans" },
+          callbacks: { label: (c) => ` ${c.dataset.label}: ${yFmt(c.parsed.y)}` } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: ink, font: { family: "IBM Plex Mono", size: 11 }, maxRotation: 0, autoSkip: true, autoSkipPadding: 8 }, border: { color: grid } },
+        y: { min: yMin, max: yMax, grid: { color: grid }, ticks: { color: ink, font: { family: "IBM Plex Mono", size: 11 }, callback: (v) => yFmt(v) }, border: { display: false } },
+      }, ...extra,
+    };
+  }
+  const line = (label, data, color, dash = false, width = 2.5) => ({ label, data, borderColor: color, backgroundColor: color, borderWidth: width,
+    borderDash: dash ? [6, 4] : [], pointRadius: 0, pointHoverRadius: 5, pointHitRadius: 12, tension: 0.25 });
+  function draw(id, type, data, opts) {
+    if (charts[id]) { charts[id].data = data; charts[id].options = opts; charts[id].update(); return; }
+    charts[id] = new Chart($(id), { type, data, options: opts });
+  }
+  function hbar(id, labels, lo, hi, fmt, colorFn) {
+    const opts = baseOpts(fmt, undefined, undefined, { indexAxis: "y" });
+    opts.scales = { x: { grid: { color: css("--grid") }, ticks: { color: css("--muted"), font: { family: "IBM Plex Mono", size: 11 }, callback: (v) => fmt(v) }, border: { display: false } },
+      y: { grid: { display: false }, ticks: { color: css("--ink"), font: { family: "IBM Plex Sans", size: 12 } }, border: { color: css("--grid") } } };
+    opts.interaction = { mode: "nearest", intersect: true, axis: "y" };
+    opts.plugins.tooltip.callbacks = { label: (c) => ` ${fmt(c.raw[0])} sampai ${fmt(c.raw[1])}` };
+    draw(id, "bar", { labels, datasets: [{ label: "Rentang", data: labels.map((_, i) => [lo[i], hi[i]]),
+      backgroundColor: labels.map((_, i) => colorFn(i)), borderRadius: 3, borderSkipped: false, barPercentage: 0.7 }] }, opts);
+  }
+  const YRS = M.YEARS.map(String);
+  const ann = (out, key, f = 1) => M.YEARS.map((y) => +(M.annual(out, key, y) * f).toFixed(3));
+
+  // ---------------------------------------------------------------- shared SD runs at casebook defaults
+  const P0 = DATA.sd.params;
+  const DEF0 = (() => {
+    const base = M.simulate(P0, M.POLICIES.do_nothing), frozen = M.simulate(P0, M.POLICIES.frozen_2025);
+    const plan = M.simulate(P0, M.POLICIES.clk_v2);
+    const relapse = M.simulate(P0, { ...M.POLICIES.clk_v2, end: 2031.0 });
+    return { base, frozen, plan, relapse, e: M.economics(P0, M.POLICIES.clk_v2, base, plan, frozen) };
+  })();
+  const XL0 = F.run({ ...F.SCEN.dasar });
+  const MCP = DATA.sd.mc["CLK v2, pilot-light + gate"], MCL = DATA.sd.mc["CLK v2, 1 year late + gate"];
+  const XLD = DATA.xl.strategies.find((s) => s.id === "D"), XLF = DATA.xl.strategies.find((s) => s.id === "F");
+
+  // ---------------------------------------------------------------- RINGKASAN
+  function renderSummary() {
+    const sd30 = M.annual(DEF0.plan, "cost_idx_real", 2030), dn30 = M.annual(DEF0.base, "cost_idx_real", 2030);
+    const co2 = DEF0.e.tco2.find((r) => r.year === 2030).tco2;
+    $("sumTiles").innerHTML = [
+      tile("Indeks biaya 2030, harga konstan 2025", `${idn(XL0.idx, 0)}–${idn(sd30, 0)}`, `Spreadsheet ${idn(XL0.idx)} · system dynamics ${idn(sd30)} · tanpa tindakan ${idn(dn30)}`),
+      tile("NPV 2026–2030 dari Rp80 M", `Rp${idn(XL0.npv, 0)}–${idn(DEF0.e.npv, 0)} M`, `Spreadsheet ${rp(XL0.npv)} · SD vs tanpa tindakan ${rp(DEF0.e.npv)}`,
+        `<span class="pill good">✓ Peluang positif ${pct(XLD.prob_pos)}–${pct(MCP.p_pos)}</span>`),
+      tile("Bila terlambat 1 tahun", `${pct(MCL.p_pos)}–${pct(XLF.prob_pos)}`, "Peluang NPV positif turun; karena itu 100 hari pertama hanya memakai aset yang ada", `<span class="pill warn">! Risiko terbesar</span>`),
+      tile("Orang dan bumi, 2030", `${idn(co2, 0)} t CO₂`, `Engineer SW & AI L3+ 2 → ${idn(M.at(DEF0.plan, "S", 2031))} · know-how 33% → ${pct(M.at(DEF0.plan, "K", 2031))}`),
+    ].join("");
+    $("sumLimits").innerHTML = `Terhadap kinerja yang dibekukan di 2025 tanpa usaha, NPV 2026–30 ${rp(DEF0.e.npvFrozen)} dan baru positif dalam 10 tahun. Terhadap pesaing yang terus turun, program memperlambat pelebaran selisih tetapi <strong>tidak menutupnya</strong> pada 2030.`;
+    const C1 = css("--series-1"), C2 = css("--series-2"), CB = css("--baseline");
+    $("legSum").innerHTML = `<span><i class="sw" style="border-color:${C1}"></i>CLK v2 (system dynamics)</span><span><i class="sw dash" style="border-color:${C2}"></i>Spreadsheet 2030: ${idn(XL0.idx)}</span><span><i class="sw" style="border-color:${CB}"></i>Tanpa tindakan</span>`;
+    const xlPoint = M.YEARS.map((y) => (y === 2030 ? +XL0.idx.toFixed(2) : y === 2025 ? 106 : null));
+    const xlLine = { ...line("Spreadsheet", xlPoint, C2, true, 2), spanGaps: true, pointRadius: xlPoint.map((v) => (v === null ? 0 : 4)) };
+    draw("cSum", "line", { labels: YRS, datasets: [line("CLK v2", ann(DEF0.plan, "cost_idx_real"), C1), xlLine, line("Tanpa tindakan", ann(DEF0.base, "cost_idx_real"), CB, false, 2)] },
+      baseOpts((v) => idn(v, 0), 90, 125));
+  }
+
+  // ---------------------------------------------------------------- DIAGNOSIS
+  const hw = store.get("clk-heat", { c: 1, q: 1, f: 1 });
+  function renderDiag() {
+    const D = DATA.diag;
+    $("diagTiles").innerHTML = [
+      tile("Selisih biaya ke pemain baru", "6 → 17", "poin indeks, 2023 → 2025 (Ex.3)"),
+      tile("Pelebaran per tahun", "+" + idn(D.widen) + " poin", `${pct(D.shareTmmin)} dari TMMIN yang naik, ${pct(1 - D.shareTmmin)} dari pesaing yang turun`),
+      tile("Ide terimplementasi per engineer", `${idn(D.impl[0], 2)} → ${idn(D.impl[1], 2)}`, `${pct(D.impl[1] / D.impl[0] - 1)} (Ex.6A: ide × persen diimplementasikan)`, `<span class="pill bad">✕ Mesin perbaikan melemah</span>`),
+      tile("Bagian selisih yang bisa dikendalikan", `${idn(D.bridge.driftLo)}–${idn(D.bridge.driftHi)}`, "poin dari 17 (scrap, NVA, downtime); sisanya struktural"),
+    ].join("");
+    const C1 = css("--series-1"), C2 = css("--series-2");
+    draw("cGap", "line", { labels: ["2023", "2024", "2025"], datasets: [line("TMMIN", [100, 103, 106], C2), line("Pemain baru", [94, 91, 89], C1)].map((d) => ({ ...d, pointRadius: 4 })) },
+      baseOpts((v) => idn(v, 0), 85, 110));
+    const b = D.bridge;
+    const bo = baseOpts((v) => idn(v, 1), 0, 18, { indexAxis: "y" });
+    bo.scales = { x: { min: 0, max: 18, grid: { color: css("--grid") }, ticks: { color: css("--muted"), font: { family: "IBM Plex Mono", size: 11 } }, border: { display: false } },
+      y: { grid: { display: false }, ticks: { color: css("--ink"), font: { family: "IBM Plex Sans", size: 12 } } } };
+    bo.interaction = { mode: "nearest", intersect: true, axis: "y" };
+    bo.plugins.tooltip.callbacks = { label: (c) => ` ${idn(c.parsed.x, 1)} poin` };
+    draw("cBridge", "bar", { labels: ["Eskalasi upah & energi", "Scrap 100 → 108", "NVA 20% → 22%", "Downtime (maks)", "Selisih 2025"],
+      datasets: [{ label: "Poin", data: [b.esc, b.scrap, b.nva, b.maintHi, 17], backgroundColor: [css("--baseline"), C1, C1, C1, C2], borderRadius: 3, barPercentage: 0.7 }] }, bo);
+    $("tEx4").innerHTML = mdTable(DATA.ex["4"], [1, 2]);
+    $("tEx6a").innerHTML = mdTable(DATA.ex["6A"], [1, 2]);
+    $("tEx6b").innerHTML = mdTable(DATA.ex["6B"], [1]);
+    // heat map
+    for (const [id, k] of [["hwC", "c"], ["hwQ", "q"], ["hwF", "f"]]) { $(id).value = hw[k]; $(id + "V").textContent = "× " + hw[k]; }
+    const rows = Object.entries(D.procs).map(([name, [lvl, c, q, f]]) => ({ name, lvl, c, q, f, s: (hw.c * c + hw.q * q + hw.f * f) * (4 - lvl), top3: D.top3[name] }))
+      .sort((a, b) => b.s - a.s);
+    const maxS = rows[0].s;
+    const cell = (v) => `<td class="n" style="background:color-mix(in srgb, var(--series-2) ${v * 14}%, transparent)">${v}</td>`;
+    $("tHeat").innerHTML = `<table><tr><th>#</th><th>Proses</th><th class="n">Level</th><th class="n">Biaya</th><th class="n">Kualitas</th><th class="n">Fleks.</th><th class="n">Skor</th><th class="n">Tiga besar /27</th></tr>` +
+      rows.map((r, i) => `<tr class="${i < 3 ? "sel" : ""}"><td class="n">${i + 1}</td><td>${esc(r.name)}</td><td class="n">${r.lvl}</td>${cell(r.c)}${cell(r.q)}${cell(r.f)}<td class="n score">${r.s}</td><td class="n">${r.top3}</td></tr>`).join("") + "</table>";
+  }
+  for (const [id, k] of [["hwC", "c"], ["hwQ", "q"], ["hwF", "f"]]) $(id).addEventListener("input", (e) => { hw[k] = +e.target.value; store.set("clk-heat", hw); renderDiag(); });
+
+  // ---------------------------------------------------------------- SOLUSI
+  const SC = DATA.score;
+  const sw = store.get("clk-score", SC.criteria.map((c) => c[2]));
+  $("scoreCtl").innerHTML = `<div class="eyebrow">Bobot kriteria</div>` + SC.criteria.map(([k, lab], i) =>
+    `<div class="ctl"><label for="sw${i}">${esc(lab)} <span class="val" id="sw${i}V"></span></label><input type="range" id="sw${i}" min="0" max="0.4" step="0.05"></div>`).join("") +
+    `<small class="note">Bobot dinormalisasi otomatis. Bobot tim: 20/15/15/15/10/15/10.</small><button type="button" class="reset" id="swReset">Kembali ke bobot tim</button>`;
+  SC.criteria.forEach((_, i) => $("sw" + i).addEventListener("input", (e) => { sw[i] = +e.target.value; store.set("clk-score", sw); renderScore(); }));
+  $("swReset").addEventListener("click", () => { SC.criteria.forEach((c, i) => { sw[i] = c[2]; }); store.set("clk-score", sw); renderScore(); });
+  function renderScore() {
+    const tot = sw.reduce((a, v) => a + v, 0) || 1;
+    sw.forEach((v, i) => { $("sw" + i).value = v; $("sw" + i + "V").textContent = pct(v / tot); });
+    const rows = Object.entries(SC.options).map(([n, s]) => ({ n, s, t: s.reduce((a, v, i) => a + v * sw[i] / tot, 0) })).sort((a, b) => b.t - a.t);
+    $("tScore").innerHTML = `<table><tr><th>#</th><th>Opsi</th>${SC.criteria.map((c) => `<th class="n" title="${esc(c[1])}">${esc(c[1].split(" ")[0])}</th>`).join("")}<th class="n">Total</th><th class="n">#1 dari 20.000</th></tr>` +
+      rows.map((r, i) => `<tr class="${i === 0 ? "sel" : ""}"><td class="n">${i + 1}</td><td>${esc(r.n)}</td>${r.s.map((v) => `<td class="n">${v}</td>`).join("")}<td class="n score">${idn(r.t, 2)}</td><td class="n">${pct(SC.rank1[r.n] || 0, 1)}</td></tr>`).join("") + "</table>";
+    const pw = SC.pcrit.map((c) => c[2]);
+    const prow = Object.entries(SC.pilots).map(([n, s]) => ({ n, s, t: s.reduce((a, v, i) => a + v * pw[i], 0) })).sort((a, b) => b.t - a.t);
+    $("tPilot").innerHTML = `<table><tr><th>Area</th>${SC.pcrit.map((c) => `<th class="n">${esc(c[1])} (${pct(c[2])})</th>`).join("")}<th class="n">Total</th><th class="n">#1 dari 20.000</th></tr>` +
+      prow.map((r, i) => `<tr class="${i === 0 ? "sel" : ""}"><td>${esc(r.n)}</td>${r.s.map((v) => `<td class="n">${v}</td>`).join("")}<td class="n score">${idn(r.t, 2)}</td><td class="n">${pct(SC.pilotRank1[r.n] || 0, 1)}</td></tr>`).join("") + "</table>";
+  }
+
+  // ---------------------------------------------------------------- BUKTI
+  function renderProof() {
+    const X = DATA.xl;
+    const labs = ["Hari ini: visual di akhir", "Kamera lebih baik di akhir", "Loop, 31% alert diabaikan", "Loop berpusat manusia"];
+    const vals = X.sim.map((s) => +(-s.scrap_red * 100).toFixed(1));
+    const o = baseOpts((v) => (v > 0 ? "+" : "") + idn(v, 0) + "%", -100, 20);
+    o.interaction = { mode: "nearest", intersect: true };
+    o.plugins.tooltip.callbacks = { label: (c) => ` Perubahan scrap: ${(c.parsed.y > 0 ? "+" : "") + idn(c.parsed.y, 1)}% · cacat lolos ${idn(-X.sim[c.dataIndex].esc_red * 100, 0)}%` };
+    draw("cSim", "bar", { labels: labs, datasets: [{ label: "Perubahan scrap", data: vals,
+      backgroundColor: vals.map((v, i) => (i === 0 ? css("--baseline") : v > 0 ? css("--series-2") : css("--series-1"))), borderRadius: 4, maxBarThickness: 64 }] }, o);
+    const od = baseOpts((v) => idn(v, 0) + "%", 0, 100);
+    od.scales.x.title = { display: true, text: "Alert yang diabaikan operator", color: css("--muted"), font: { family: "IBM Plex Sans", size: 12 } };
+    draw("cDismiss", "line", { labels: X.dismiss.map((d) => pct(d[0])), datasets: [{ ...line("Penurunan scrap", X.dismiss.map((d) => +(d[1] * 100).toFixed(1)), css("--series-1")), pointRadius: 4 }] }, od);
+    $("tSens").innerHTML = `<table><tr><th>Parameter</th><th class="n">Rendah</th><th class="n">Dasar</th><th class="n">Tinggi</th></tr>` +
+      X.sens.map((s) => `<tr><td>${esc(s.name)}</td>${s.points.map(([v, r]) => `<td class="n">${pct(r, 1)} <span class="muted">@ ${idn(v, v < 1 ? 2 : 0)}</span></td>`).join("")}</tr>`).join("") + "</table>";
+  }
+
+  // ---------------------------------------------------------------- SIMULATOR (system dynamics)
+  const DEF = { policy: "clk_v2", capex: 80, adopt: 1.0, trhc: 0.90, protect: 0.30, cplx: 0.03125, delay: 0, phasing: "light", gate: true, stop2031: false };
+  let st = { ...DEF, ...store.get("clk-sim", {}) };
+  const NOTES = { do_nothing: "Jalur pembanding: pabrik terus memburuk seperti 2023–2025.", tech_only: "Kamera dan integrasi oleh vendor di akhir lini, tanpa loop dan tanpa program SDM.",
+    people_only: "Akademi, kanal ide, sprint know-how, dan waktu dilindungi; tanpa loop data.", clk_v1: "Tiga loop dengan alert berpusat manusia, tanpa perlindungan waktu.",
+    clk_v2: "Rencana: tiga loop + waktu perbaikan dilindungi dan ratchet." };
+  const params = () => ({ ...P0, adopt: st.adopt, tr_hc: st.trhc, cplx_post: st.cplx, capex: st.capex });
   function policy(key) {
     const base = { ...M.POLICIES[key] };
     if (key === "do_nothing" || key === "frozen_2025") return base;
@@ -479,223 +902,224 @@ const DATA = {"params":{"phi":1.07,"p_min":0.85,"x_cap":2.0,"gen0":0.20431929297
     if (st.stop2031) base.end = 2031.0;
     return base;
   }
-  function run(key, p, base, frozen) {
-    const pol = policy(key);
-    const out = M.simulate(p, pol, null, st.gate);
-    const e = key === "do_nothing" ? null : M.economics(p, pol, base, out, frozen);
-    return { out, e, pol };
+  function runSd(key, p, base, frozen) {
+    const pol = policy(key), out = M.simulate(p, pol, null, st.gate);
+    return { out, pol, e: key === "do_nothing" ? null : M.economics(p, pol, base, out, frozen) };
   }
-
-  // ---------- controls
-  function bindSeg(id, key, cast = (v) => v) {
-    const el = $(id);
-    el.addEventListener("click", (ev) => {
-      const b = ev.target.closest("button"); if (!b) return;
-      st[key] = cast(b.dataset.v); update();
-    });
-  }
-  function bindRange(id, key) {
-    $(id).addEventListener("input", (ev) => { st[key] = +ev.target.value; update(); });
-  }
-  bindSeg("policy", "policy"); bindSeg("delay", "delay", Number); bindSeg("phasing", "phasing");
-  ["capex", "adopt", "trhc", "protect", "cplx"].forEach((k) => bindRange(k, k));
-  $("gate").addEventListener("change", (e) => { st.gate = e.target.checked; update(); });
-  $("stop2031").addEventListener("change", (e) => { st.stop2031 = e.target.checked; update(); });
-  $("reset").addEventListener("click", () => { st = { ...DEF }; update(); });
-
-  function syncControls() {
-    for (const [id, key] of [["policy", "policy"], ["delay", "delay"], ["phasing", "phasing"]])
-      $(id).querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === String(st[key]))));
-    $("capex").value = st.capex; $("adopt").value = st.adopt; $("trhc").value = st.trhc; $("protect").value = st.protect; $("cplx").value = st.cplx;
+  function bindSeg(id, set) { $(id).addEventListener("click", (ev) => { const b = ev.target.closest("button"); if (b) set(b.dataset.v); }); }
+  bindSeg("policy", (v) => { st.policy = v; renderSim(); }); bindSeg("delay", (v) => { st.delay = +v; renderSim(); }); bindSeg("phasing", (v) => { st.phasing = v; renderSim(); });
+  ["capex", "adopt", "trhc", "protect", "cplx"].forEach((k) => $(k).addEventListener("input", (e) => { st[k] = +e.target.value; renderSim(); }));
+  $("gate").addEventListener("change", (e) => { st.gate = e.target.checked; renderSim(); });
+  $("stop2031").addEventListener("change", (e) => { st.stop2031 = e.target.checked; renderSim(); });
+  $("reset").addEventListener("click", () => { st = { ...DEF }; renderSim(); });
+  const press = (id, v) => $(id).querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === String(v))));
+  function renderSim() {
+    store.set("clk-sim", st);
+    press("policy", st.policy); press("delay", st.delay); press("phasing", st.phasing);
+    for (const k of ["capex", "adopt", "trhc", "protect", "cplx"]) $(k).value = st[k];
     $("gate").checked = st.gate; $("stop2031").checked = st.stop2031;
-    $("capexV").textContent = "Rp" + st.capex + " M";
-    $("adoptV").textContent = pct(st.adopt); $("trhcV").textContent = pct(st.trhc);
-    $("protectV").textContent = pct(st.protect); $("cplxV").textContent = idn(st.cplx * 100, 2) + "%/thn";
-    $("policyNote").textContent = NOTES[st.policy];
-    const noProgram = st.policy === "do_nothing";
-    ["capex", "adopt", "trhc", "protect"].forEach((id) => { $(id).disabled = noProgram; });
-  }
-
-  // ---------- charts
-  const charts = {};
-  const YRS = M.YEARS.map(String);
-  const ann = (out, key, f = 1) => M.YEARS.map((y) => +(M.annual(out, key, y) * f).toFixed(3));
-  function baseOpts(yFmt, yMin, yMax) {
-    const ink = css("--muted"), grid = css("--grid");
-    return {
-      responsive: true, maintainAspectRatio: false, animation: { duration: 250 }, layout: { padding: { left: 14, right: 6 } },
-      interaction: { mode: "index", intersect: false },
-      plugins: {
-        legend: { display: false },
-        tooltip: { backgroundColor: css("--ink"), titleColor: css("--bg"), bodyColor: css("--bg"), padding: 9,
-          titleFont: { family: "IBM Plex Mono" }, bodyFont: { family: "IBM Plex Sans" },
-          callbacks: { label: (c) => ` ${c.dataset.label}: ${yFmt(c.parsed.y)}` } },
-      },
-      scales: {
-        x: { grid: { display: false }, ticks: { color: ink, font: { family: "IBM Plex Mono", size: 11 }, maxRotation: 0, autoSkip: true, autoSkipPadding: 8 }, border: { color: grid } },
-        y: { min: yMin, max: yMax, grid: { color: grid }, ticks: { color: ink, font: { family: "IBM Plex Mono", size: 11 }, callback: (v) => yFmt(v) }, border: { display: false } },
-      },
-    };
-  }
-  function line(label, data, color, dash = false, width = 2.5) {
-    return { label, data, borderColor: color, backgroundColor: color, borderWidth: width, borderDash: dash ? [6, 4] : [],
-      pointRadius: 0, pointHoverRadius: 5, pointHitRadius: 12, tension: 0.25 };
-  }
-  function draw(id, type, data, opts) {
-    if (charts[id]) { charts[id].data = data; charts[id].options = opts; charts[id].update(); return; }
-    charts[id] = new Chart($(id), { type, data, options: opts });
-  }
-  function resetCharts() { Object.values(charts).forEach((c) => c.destroy()); for (const k in charts) delete charts[k]; }
-
-  // plan baseline at the casebook defaults (fixed reference line)
-  const PLAN = (() => {
-    const p = { ...P0 };
-    const base = M.simulate(p, M.POLICIES.do_nothing);
-    return { out: M.simulate(p, M.POLICIES.clk_v2) , base };
-  })();
-
-  function tile(k, v, d, pillHtml = "") {
-    return `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div>${pillHtml}<div class="d">${d}</div></div>`;
-  }
-
-  function update() {
-    syncControls(); save();
-    const p = params();
-    const base = M.simulate(p, M.POLICIES.do_nothing);
-    const frozen = M.simulate(p, M.POLICIES.frozen_2025);
-    const cur = run(st.policy, p, base, frozen);
-    const o = cur.out, e = cur.e;
+    $("capexV").textContent = "Rp" + st.capex + " M"; $("adoptV").textContent = pct(st.adopt); $("trhcV").textContent = pct(st.trhc);
+    $("protectV").textContent = pct(st.protect); $("cplxV").textContent = idn(st.cplx * 100, 2) + "%/thn"; $("policyNote").textContent = NOTES[st.policy];
+    ["capex", "adopt", "trhc", "protect"].forEach((id) => { $(id).disabled = st.policy === "do_nothing"; });
+    const p = params(), base = M.simulate(p, M.POLICIES.do_nothing), frozen = M.simulate(p, M.POLICIES.frozen_2025);
+    const cur = runSd(st.policy, p, base, frozen), o = cur.out, e = cur.e;
     const idx30 = M.annual(o, "cost_idx_real", 2030), dn30 = M.annual(base, "cost_idx_real", 2030);
     const co2 = e ? e.tco2.find((r) => r.year === 2030).tco2 : 0;
-    const gateStopped = o.stopped;
-    let gatePill = "";
-    if (cur.pol.loop && st.gate) gatePill = gateStopped ? `<span class="pill bad">✕ Gate berhenti</span>` : `<span class="pill good">✓ Gate lolos</span>`;
-    else if (cur.pol.loop) gatePill = `<span class="pill warn">! Tanpa gate</span>`;
-    const npvCls = e ? (e.npv >= 0 ? "good" : "bad") : "";
+    let gp = "";
+    if (cur.pol.loop && st.gate) gp = o.stopped ? `<span class="pill bad">✕ Gate berhenti</span>` : `<span class="pill good">✓ Gate lolos</span>`;
+    else if (cur.pol.loop) gp = `<span class="pill warn">! Tanpa gate</span>`;
     $("tiles").innerHTML = [
       tile("Indeks biaya 2030, harga konstan 2025", idn(idx30), `Hari ini 106 · tanpa tindakan ${idn(dn30)} · selisih ${idn(idx30 - dn30)}`),
-      tile("NPV 2026–2030 vs tanpa tindakan", e ? rp(e.npv) : "–",
-        e ? `Vs kinerja beku 2025: ${rp(e.npvFrozen)} · 2026–35: ${rp(e.npv35)}` : "Pembanding",
-        e ? `<span class="pill ${npvCls}">${e.npv >= 0 ? "✓ Positif" : "✕ Negatif"} · payback ${e.payback || "setelah 2030"}</span>` : ""),
-      tile("Gate dan investasi", e ? "Rp" + idn(e.rows.filter((r) => r.year <= 2030).reduce((a, r) => a + r.inv, 0), 0) + " M" : "–",
-        "Investasi terpakai 2026–2030", gatePill),
+      tile("NPV 2026–2030 vs tanpa tindakan", e ? rp(e.npv) : "–", e ? `Vs kinerja beku 2025: ${rp(e.npvFrozen)} · 2026–35: ${rp(e.npv35)}` : "Pembanding",
+        e ? `<span class="pill ${e.npv >= 0 ? "good" : "bad"}">${e.npv >= 0 ? "✓ Positif" : "✕ Negatif"} · payback ${e.payback || "setelah 2030"}</span>` : ""),
+      tile("Gate dan investasi", e ? "Rp" + idn(e.rows.filter((r) => r.year <= 2030).reduce((a, r) => a + r.inv, 0), 0) + " M" : "–", "Investasi terpakai 2026–2030", gp),
       tile("CO₂ dihindari 2030", idn(co2, 0) + " t", `Engineer L3+ ${idn(M.at(o, "S", 2031))}/30 · know-how ${pct(M.at(o, "K", 2031))} · scrap ${idn(M.annual(o, "scrap", 2030) * 100, 0)}`),
     ].join("");
-
     const C1 = css("--series-1"), C2 = css("--series-2"), CB = css("--baseline");
-    const lab = M.POLICIES[st.policy].label;
     const showPlan = !(st.policy === "clk_v2" && JSON.stringify({ ...st, policy: 0 }) === JSON.stringify({ ...DEF, policy: 0 }));
-    const legend = [`<span><i class="sw" style="border-color:${C1}"></i>Skenario Anda: ${lab}</span>`];
-    if (showPlan) legend.push(`<span><i class="sw dash" style="border-color:${C2}"></i>Rencana dasar (CLK v2)</span>`);
-    legend.push(`<span><i class="sw" style="border-color:${CB}"></i>Tanpa tindakan</span>`);
-    $("legCost").innerHTML = legend.join("");
-
-    const ds = (key, f, fmt) => {
-      const arr = [line("Skenario Anda", ann(o, key, f), C1)];
-      if (showPlan) arr.push(line("Rencana dasar", ann(PLAN.out, key, f), C2, true, 2));
-      arr.push(line("Tanpa tindakan", ann(base, key, f), CB, false, 2));
-      return { labels: YRS, datasets: arr };
-    };
+    $("legCost").innerHTML = [`<span><i class="sw" style="border-color:${C1}"></i>Skenario Anda: ${M.POLICIES[st.policy].label}</span>`,
+      showPlan ? `<span><i class="sw dash" style="border-color:${C2}"></i>Rencana dasar (CLK v2)</span>` : "", `<span><i class="sw" style="border-color:${CB}"></i>Tanpa tindakan</span>`].join("");
+    const ds = (key, f) => ({ labels: YRS, datasets: [line("Skenario Anda", ann(o, key, f), C1), ...(showPlan ? [line("Rencana dasar", ann(DEF0.plan, key, f), C2, true, 2)] : []), line("Tanpa tindakan", ann(base, key, f), CB, false, 2)] });
     draw("cCost", "line", ds("cost_idx_real", 1), baseOpts((v) => idn(v, 0), 90, 125));
     draw("cScrap", "line", ds("scrap", 100), baseOpts((v) => idn(v, 0), 0, 160));
     draw("cTime", "line", ds("I", 100), baseOpts((v) => idn(v, 0) + "%", 0, 50));
     draw("cSkill", "line", ds("S", 1), baseOpts((v) => idn(v, 0), 0, 25));
-
-    // table view of the hero chart
     const tr = (cells, tag = "td") => "<tr>" + cells.map((c, i) => `<${tag}${i ? ' class="n"' : ""}>${c}</${tag}>`).join("") + "</tr>";
     $("tCost").innerHTML = tr(["Tahun", "Skenario Anda", "Rencana dasar", "Tanpa tindakan"], "th") +
-      M.YEARS.map((y) => tr([y, idn(M.annual(o, "cost_idx_real", y)), idn(M.annual(PLAN.out, "cost_idx_real", y)), idn(M.annual(base, "cost_idx_real", y))])).join("");
-
-    // cash flow
+      M.YEARS.map((y) => tr([y, idn(M.annual(o, "cost_idx_real", y)), idn(M.annual(DEF0.plan, "cost_idx_real", y)), idn(M.annual(base, "cost_idx_real", y))])).join("");
     if (e) {
-      const good = css("--series-1"), bad = css("--series-2");
-      const net = e.rows.map((r) => +r.net.toFixed(2));
-      const opts = baseOpts((v) => idn(v, 0));
-      opts.interaction = { mode: "nearest", intersect: true };
-      opts.plugins.tooltip.callbacks = { label: (c) => {
-        const r = e.rows[c.dataIndex];
-        return [` Arus kas bersih: ${rp(r.net)}`, ` Penghematan: ${rp(r.sav)}`, ` Investasi: ${rp(r.inv)}`, ` Biaya berjalan: ${rp(r.run)}`];
-      } };
-      draw("cCash", "bar", { labels: e.rows.map((r) => String(r.year)), datasets: [{ label: "Arus kas bersih", data: net,
-        backgroundColor: net.map((v) => (v >= 0 ? good : bad)), borderRadius: 4, borderSkipped: "start", maxBarThickness: 28 }] }, opts);
-      const co = e.tco2.map((r) => Math.round(r.tco2));
-      const o2 = baseOpts((v) => idn(v, 0));
-      o2.plugins.tooltip.callbacks = { label: (c) => ` CO₂ dihindari: ${idn(c.parsed.y, 0)} ton` };
-      o2.interaction = { mode: "nearest", intersect: true };
-      draw("cCo2", "bar", { labels: e.tco2.map((r) => String(r.year)), datasets: [{ label: "CO₂ dihindari", data: co,
-        backgroundColor: css("--series-3"), borderRadius: 4, borderSkipped: "start", maxBarThickness: 28 }] }, o2);
-    } else {
-      for (const id of ["cCash", "cCo2"]) draw(id, "bar", { labels: [], datasets: [] }, baseOpts((v) => v));
-    }
-
-    // gate
+      const net = e.rows.map((r) => +r.net.toFixed(2)), oc = baseOpts((v) => idn(v, 0));
+      oc.interaction = { mode: "nearest", intersect: true };
+      oc.plugins.tooltip.callbacks = { label: (c) => { const r = e.rows[c.dataIndex]; return [` Arus kas bersih: ${rp(r.net)}`, ` Penghematan: ${rp(r.sav)}`, ` Investasi: ${rp(r.inv)}`, ` Biaya berjalan: ${rp(r.run)}`]; } };
+      draw("cCash", "bar", { labels: e.rows.map((r) => String(r.year)), datasets: [{ label: "Arus kas bersih", data: net, backgroundColor: net.map((v) => (v >= 0 ? C1 : C2)), borderRadius: 4, borderSkipped: "start", maxBarThickness: 28 }] }, oc);
+    } else draw("cCash", "bar", { labels: [], datasets: [] }, baseOpts((v) => v));
     const g = o.gate;
-    if (!cur.pol.loop) {
-      $("gateBox").innerHTML = `<p class="note">Gate hanya berlaku untuk kebijakan dengan loop (CLK v1 dan v2). ${st.policy === "tech_only" ? "Beli teknologi saja tidak punya titik berhenti: seluruh Rp" + st.capex + " M dibelanjakan." : ""}</p>`;
-    } else if (!st.gate) {
-      $("gateBox").innerHTML = `<p class="note">Gate dimatikan: seluruh investasi dibelanjakan apa pun hasil pilotnya. Nyalakan untuk melihat kriteria.</p>`;
-    } else if (g) {
-      const rows = [
-        ["Penurunan scrap di area pilot", g.pilotCut, 0.60, pct(g.pilotCut), "≥ 60%"],
-        ["Kepatuhan alert operator", g.Tr, 0.80, pct(g.Tr), "≥ 80%"],
-        ["Cakupan loop (lini kendaraan)", g.Lq, 0.15, pct(g.Lq), "≥ 15%"],
-        ["Ide terimplementasi per engineer", g.ideas, 0.75, idn(g.ideas, 2), "≥ 0,75"],
-      ];
-      $("gateBox").innerHTML = `<div class="eyebrow">Diukur ${g.t >= 2028.95 ? "akhir 2028" : g.t >= 2027.95 ? "akhir 2027" : "akhir " + Math.floor(g.t)}</div>` +
+    if (!cur.pol.loop) $("gateBox").innerHTML = `<p class="note">Gate hanya berlaku untuk kebijakan dengan loop (CLK v1 dan v2). ${st.policy === "tech_only" ? "Beli teknologi saja tidak punya titik berhenti: seluruh Rp" + st.capex + " M dibelanjakan." : ""}</p>`;
+    else if (!st.gate) $("gateBox").innerHTML = `<p class="note">Gate dimatikan: seluruh investasi dibelanjakan apa pun hasil pilotnya.</p>`;
+    else if (g) {
+      const rows = [["Penurunan scrap di area pilot", g.pilotCut, 0.60, pct(g.pilotCut), "≥ 60%"], ["Kepatuhan alert operator", g.Tr, 0.80, pct(g.Tr), "≥ 80%"],
+        ["Cakupan loop (lini kendaraan)", g.Lq, 0.15, pct(g.Lq), "≥ 15%"], ["Ide terimplementasi per engineer", g.ideas, 0.75, idn(g.ideas, 2), "≥ 0,75"]];
+      $("gateBox").innerHTML = `<div class="eyebrow">Diukur akhir ${Math.round(g.t) - 1}</div>` +
         rows.map(([k, v, th, vs, ts]) => `<div class="row"><span class="mark ${v >= th ? "ok" : "no"}">${v >= th ? "✓" : "✕"}</span><span>${k} <span class="muted">(${ts})</span></span><span class="num">${vs}</span></div>`).join("") +
         `<div style="margin-top:6px">${o.stopped ? '<span class="pill bad">✕ Gate berhenti: 75% belanja ditahan</span>' : '<span class="pill good">✓ Gate lolos: program diskalakan</span>'}</div>`;
-    } else {
-      $("gateBox").innerHTML = `<p class="note">Gate jatuh setelah 2035 untuk pilihan mulai ini.</p>`;
-    }
-
-    // all policies table
+    } else $("gateBox").innerHTML = `<p class="note">Gate jatuh setelah 2035 untuk pilihan mulai ini.</p>`;
     const keys = ["do_nothing", "tech_only", "people_only", "clk_v1", "clk_v2"];
-    const rowsPol = keys.map((k) => {
-      const r = k === st.policy ? cur : run(k, p, base, frozen);
-      return { k, idx: M.annual(r.out, "cost_idx_real", 2030), npv: r.e ? r.e.npv : null, scrap: M.annual(r.out, "scrap", 2030) * 100, l3: M.at(r.out, "S", 2031) };
-    });
-    $("tPol").innerHTML = "<tr><th>Kebijakan</th><th class='n'>Biaya 2030</th><th class='n'>NPV</th><th class='n'>Scrap</th><th class='n'>L3+</th></tr>" +
-      rowsPol.map((r) => `<tr class="${r.k === st.policy ? "sel" : ""}"><td>${M.POLICIES[r.k].label}</td><td class="n">${idn(r.idx)}</td><td class="n">${r.npv === null ? "–" : idn(r.npv)}</td><td class="n">${idn(r.scrap, 0)}</td><td class="n">${idn(r.l3)}</td></tr>`).join("");
+    $("tPol").innerHTML = "<tr><th>Kebijakan</th><th class='n'>Biaya 2030</th><th class='n'>NPV</th><th class='n'>Scrap</th><th class='n'>L3+</th></tr>" + keys.map((k) => {
+      const r = k === st.policy ? cur : runSd(k, p, base, frozen);
+      return `<tr class="${k === st.policy ? "sel" : ""}"><td>${M.POLICIES[k].label}</td><td class="n">${idn(M.annual(r.out, "cost_idx_real", 2030))}</td><td class="n">${r.e ? idn(r.e.npv) : "–"}</td><td class="n">${idn(M.annual(r.out, "scrap", 2030) * 100, 0)}</td><td class="n">${idn(M.at(r.out, "S", 2031))}</td></tr>`;
+    }).join("");
   }
 
-  // ---------- static Monte Carlo panel
-  function renderMC() {
-    const rows = [
-      ["Rencana: pilot-light + gate", "CLK v2, pilot-light + gate", true],
-      ["Pilot-light tanpa gate", "CLK v2, pilot-light, no gate"],
-      ["Belanja di awal + gate", "CLK v2, front-loaded + gate"],
-      ["Belanja di awal tanpa gate", "CLK v2, front-loaded, no gate"],
-      ["Loop gagal: pilot-light + gate", "FAILURE (adoption 20-60%): pilot-light + gate"],
-      ["Loop gagal: belanja di awal + gate", "FAILURE (adoption 20-60%): front-loaded + gate"],
-      ["Tanpa perlindungan waktu (v1)", "CLK v1 (no protected time) + gate"],
-      ["Lindungi 40% waktu", "CLK v2 protecting 40% + gate"],
-      ["Rencana, terlambat 1 tahun", "CLK v2, 1 year late + gate"],
-    ];
-    const lo = -35, hi = 75, pos = (v) => ((Math.min(Math.max(v, lo), hi) - lo) / (hi - lo)) * 100;
-    $("mcBox").innerHTML = rows.map(([lab, key, plan]) => {
-      const m = DATA.mc[key];
-      const tipTxt = `${lab}: P5 ${rp(m.p5)} · median ${rp(m.p50)} · P95 ${rp(m.p95)} · gate berhenti ${pct(m.gate_stop)}`;
-      return `<div class="r ${plan ? "plan" : ""}"><span>${lab}</span>
-        <div class="track" tabindex="0" data-tip="${tipTxt}" aria-label="${tipTxt}">
-          <span class="zero" style="left:${pos(0)}%"></span>
-          <span class="bar" style="left:${pos(m.p5)}%;width:${pos(m.p95) - pos(m.p5)}%"></span>
-          <span class="dot" style="left:${pos(m.p50)}%"></span></div>
-        <span class="p">${pct(m.p_pos)}</span></div>`;
+  // ---------------------------------------------------------------- FINANSIAL
+  const FDEF = { ...F.SCEN.dasar, laborShare: 0.40, cashConv: 0.50, phasing: "light", delay: 0 };
+  let fs = { ...FDEF, ...store.get("clk-fin", {}) };
+  const FMAP = [["fScrap", "scrap", (v) => pct(v)], ["fMaint", "maint", (v) => pct(v)], ["fNva", "nvaCut", (v) => pct(v)], ["fEnergy", "energy", (v) => pct(v)],
+    ["fVar", "variant", (v) => pct(v)], ["fCapex", "capex", (v) => "Rp" + v + " M"], ["fRun", "runPct", (v) => pct(v)], ["fTrain", "training", (v) => "Rp" + idn(v) + " M"],
+    ["fLabor", "laborShare", (v) => pct(v)], ["fCash", "cashConv", (v) => pct(v)]];
+  FMAP.forEach(([id, k]) => $(id).addEventListener("input", (e) => { fs[k] = +e.target.value; renderFin(); }));
+  bindSeg("fScen", (v) => { fs = { ...fs, ...F.SCEN[v] }; renderFin(); });
+  bindSeg("fPhase", (v) => { fs.phasing = v; renderFin(); });
+  bindSeg("fDelay", (v) => { fs.delay = +v; renderFin(); });
+  function renderFin() {
+    store.set("clk-fin", fs);
+    FMAP.forEach(([id, k, fmt]) => { $(id).value = fs[k]; $(id + "V").textContent = fmt(fs[k]); });
+    const scen = Object.keys(F.SCEN).find((k) => Object.entries(F.SCEN[k]).every(([kk, v]) => Math.abs(fs[kk] - v) < 1e-9));
+    press("fScen", scen || ""); press("fPhase", fs.phasing); press("fDelay", fs.delay);
+    const r = F.run(fs);
+    $("finTiles").innerHTML = [
+      tile("NPV 2026–2030 (10%)", rp(r.npv), `Dengan nilai sisa peralatan: ${rp(r.npvResidual)}`, `<span class="pill ${r.npv >= 0 ? "good" : "bad"}">${r.npv >= 0 ? "✓ Positif" : "✕ Negatif"}</span>`),
+      tile("Payback dan IRR", r.payback ? String(r.payback) : "Setelah 2030", `IRR ${r.irr === null ? "tidak terdefinisi" : pct(r.irr)} · IRR tampak tinggi karena belanja awal kecil`),
+      tile("Penghematan run-rate", rp(r.runRate), `${pct(r.runRate / r.conv, 1)} dari biaya konversi ${rp(r.conv, 0)}`),
+      tile("Indeks biaya 2030, harga 2025", idn(r.idx), `${pct(r.gapClosed)} selisih ke 89 tertutup · varian ${idn(r.months)} bulan`),
+    ].join("");
+    const cols = [["scrap", "Scrap", "--series-1"], ["variant", "Modifikasi varian", "--series-2"], ["labor", "Waktu operator", "--series-3"], ["maint", "Perawatan", "--series-4"], ["energy", "Energi", "--series-5"]];
+    $("legFin").innerHTML = cols.map(([, lab, c]) => `<span><i class="box" style="background:${css(c)}"></i>${lab}</span>`).join("");
+    const o = baseOpts((v) => idn(v, 0));
+    o.scales.x.stacked = true; o.scales.y.stacked = true;
+    o.plugins.tooltip.callbacks = { label: (c) => ` ${c.dataset.label}: ${rp(c.parsed.y)}`, footer: (items) => `Total: ${rp(items.reduce((a, i) => a + i.parsed.y, 0))}` };
+    draw("cFin", "bar", { labels: r.rows.map((x) => String(x.year)), datasets: cols.map(([k, lab, c]) => ({ label: lab, data: r.rows.map((x) => +x[k].toFixed(2)), backgroundColor: css(c), borderColor: css("--surface"), borderWidth: 1, maxBarThickness: 56 })) }, o);
+    const tr = (c, tag = "td") => "<tr>" + c.map((x, i) => `<${tag}${i ? ' class="n"' : ""}>${x}</${tag}>`).join("") + "</tr>";
+    $("tFin").innerHTML = tr(["Tahun", "Penghematan", "Investasi", "Biaya berjalan", "Arus kas bersih", "Kumulatif"], "th") +
+      r.rows.map((x) => tr([x.year, idn(x.sav), idn(x.inv), idn(x.run), idn(x.net), idn(x.cum)])).join("");
+    $("tScen").innerHTML = "<table><tr><th>Rp miliar</th>" + Object.keys(F.SCEN).map((k) => `<th class="n">${k[0].toUpperCase() + k.slice(1)}</th>`).join("") + "</tr>" +
+      [["Investasi", (s, x) => idn(s.capex, 0)], ["Penghematan run-rate", (s, x) => idn(x.runRate)], ["NPV 2026–2030", (s, x) => idn(x.npv)], ["Payback", (s, x) => x.payback || "Setelah 2030"], ["Indeks biaya 2030", (s, x) => idn(x.idx)]]
+        .map(([lab, f]) => `<tr><td>${lab}</td>` + Object.values(F.SCEN).map((s) => `<td class="n">${f(s, F.run({ ...s }))}</td>`).join("") + "</tr>").join("") + "</table>";
+    $("tBreak").innerHTML = "<table><tr><th class='n'>Investasi</th><th class='n'>Penghematan tahun 1</th><th class='n'>% biaya konversi</th><th class='n'>% selisih tertutup</th></tr>" +
+      [40, 60, 80, 100, 120].map((inv) => { const b = F.breakEven(inv); return `<tr class="${inv === fs.capex ? "sel" : ""}"><td class="n">Rp${inv} M</td><td class="n">${rp(b.first)}</td><td class="n">${pct(b.pctConv, 1)}</td><td class="n">${pct(b.shareGap)}</td></tr>`; }).join("") + "</table>";
+    const T = DATA.xl.tornado;
+    hbar("cTornXl", T.map((t) => t.name), T.map((t) => t.lo), T.map((t) => t.hi), (v) => idn(v, 0), () => css("--series-1"));
+  }
+
+  // ---------------------------------------------------------------- STRES
+  function rangeRows(boxId, rows, lo, hi) {
+    const pos = (v) => ((Math.min(Math.max(v, lo), hi) - lo) / (hi - lo)) * 100;
+    $(boxId).innerHTML = rows.map((r) => {
+      const t = `${r.lab}: P5 ${rp(r.p5)} · median ${rp(r.p50)} · P95 ${rp(r.p95)}${r.extra || ""}`;
+      return `<div class="r ${r.plan ? "plan" : ""}"><span>${esc(r.lab)}</span><div class="track" tabindex="0" data-tip="${esc(t)}" aria-label="${esc(t)}">
+        <span class="zero" style="left:${pos(0)}%"></span><span class="bar" style="left:${pos(r.p5)}%;width:${pos(r.p95) - pos(r.p5)}%"></span><span class="dot" style="left:${pos(r.p50)}%"></span></div>
+        <span class="p">${pct(r.p_pos)}</span></div>`;
     }).join("") + `<div class="r"><span></span><div class="legend num" style="justify-content:space-between"><span>${rp(lo, 0)}</span><span>0</span><span>${rp(hi, 0)}</span></div><span class="p muted">P(NPV&gt;0)</span></div>`;
-    const tip = $("tip");
-    $("mcBox").addEventListener("pointermove", (ev) => {
-      const t = ev.target.closest(".track"); if (!t) { tip.hidden = true; return; }
-      tip.textContent = t.dataset.tip; tip.hidden = false;
-      tip.style.left = Math.min(ev.clientX + 12, window.innerWidth - 270) + "px"; tip.style.top = ev.clientY + 14 + "px";
-    });
-    $("mcBox").addEventListener("pointerleave", () => { tip.hidden = true; });
-    $("xlPlan").textContent = pct(DATA.xl.pPlan); $("xlNoGate").textContent = pct(DATA.xl.pNoGate);
-    $("xlFront").textContent = pct(DATA.xl.pFront); $("xlLate").textContent = pct(DATA.xl.pLate);
+  }
+  function renderStress() {
+    const S = DATA.sd.mc;
+    const sdRows = [["Rencana: pilot-light + gate", "CLK v2, pilot-light + gate", true], ["Pilot-light tanpa gate", "CLK v2, pilot-light, no gate"], ["Belanja di awal + gate", "CLK v2, front-loaded + gate"],
+      ["Belanja di awal tanpa gate", "CLK v2, front-loaded, no gate"], ["Loop gagal: pilot-light + gate", "FAILURE (adoption 20-60%): pilot-light + gate"],
+      ["Loop gagal: belanja di awal + gate", "FAILURE (adoption 20-60%): front-loaded + gate"], ["Tanpa perlindungan waktu (v1)", "CLK v1 (no protected time) + gate"],
+      ["Lindungi 40% waktu", "CLK v2 protecting 40% + gate"], ["Rencana, terlambat 1 tahun", "CLK v2, 1 year late + gate"]]
+      .map(([lab, k, plan]) => ({ lab, plan, ...S[k], extra: ` · gate berhenti ${pct(S[k].gate_stop)}` }));
+    rangeRows("mcBox", sdRows, -35, 75);
+    const XN = { A: "Belanja di awal, tanpa gate", B: "Belanja di awal + gate (65% sudah terpakai)", C: "Pilot-light, tanpa gate", D: "Rencana: pilot-light + gate",
+      E: "Rencana + nilai sisa peralatan", F: "Rencana, terlambat 1 tahun", G: "Terlambat 1 tahun + nilai sisa" };
+    rangeRows("xlBox", DATA.xl.strategies.map((s) => ({ lab: XN[s.id], plan: s.id === "D", p5: s.p5, p50: s.p50, p95: s.p95, p_pos: s.prob_pos })), -45, 75);
+    $("xlGate").textContent = pct(DATA.xl.gateStop);
+    const NAMES = { capex: "Investasi", cplx_post: "Laju kompleksitas", nva_red: "Penurunan NVA", var_red: "Penurunan biaya varian", scope: "Cakupan scrap loop",
+      adopt: "Adopsi", sprint: "Sprint know-how", idea_gain: "Efek kanal ide", dt_red: "Penurunan downtime", vis_gain: "Visibilitas penyebab", tools_gain: "Efek alat buatan sendiri",
+      tr_hc: "Target kepatuhan alert", build: "Laju pulih kapabilitas", cash_conv: "Waktu menjadi kas", e_red: "Penurunan energi", k_std_gain: "Standarisasi know-how",
+      build_per_eng: "Laju bangun per engineer", unserved_gen: "Efek masalah tak tertangani" };
+    const T = DATA.sd.tornado.slice(0, 10);
+    hbar("cTornSd", T.map((t) => NAMES[t.name] || t.name), T.map((t) => t.lo), T.map((t) => t.hi), (v) => idn(v, 0), () => css("--series-1"));
+  }
+  const tip = $("tip");
+  document.addEventListener("pointermove", (ev) => {
+    const t = ev.target.closest && ev.target.closest(".track"); if (!t) { tip.hidden = true; return; }
+    tip.textContent = t.dataset.tip; tip.hidden = false;
+    tip.style.left = Math.min(ev.clientX + 12, window.innerWidth - 290) + "px"; tip.style.top = ev.clientY + 14 + "px";
+  });
+
+  // ---------------------------------------------------------------- KEBERLANJUTAN
+  function renderSus() {
+    const e = DEF0.e, co = e.tco2.map((r) => Math.round(r.tco2));
+    const cum30 = e.tco2.filter((r) => r.year <= 2030).reduce((a, r) => a + r.tco2, 0), cum35 = e.tco2.reduce((a, r) => a + r.tco2, 0);
+    const scrapV = M.annual(DEF0.plan, "scrap", 2030) / M.annual(DEF0.base, "scrap", 2030) - 1;
+    const soc = DATA.sd.social["2030"];
+    $("susTiles").innerHTML = [
+      tile("CO₂ dihindari 2030", idn(co[4], 0) + " t", `Kumulatif ${idn(cum30, 0)} t (2026–30), ${idn(cum35, 0)} t (2026–35)`),
+      tile("Scrap (material terbuang)", pct(scrapV), "2030, vs tanpa tindakan"),
+      tile("Ketergantungan pada 1–2 senior", `48% → ${pct(soc.senior_dep)}`, `Engineer baru mandiri ${idn(soc.ramp_months)} bulan (hari ini 15)`),
+      tile("Ketahanan 2035", idn(M.annual(DEF0.plan, "cost_idx_real", 2035)), `Bila program dihentikan 2031: ${idn(M.annual(DEF0.relapse, "cost_idx_real", 2035))}`, `<span class="pill warn">! Butuh pemeliharaan</span>`),
+    ].join("");
+    const o = baseOpts((v) => idn(v, 0));
+    o.interaction = { mode: "nearest", intersect: true };
+    o.plugins.tooltip.callbacks = { label: (c) => ` CO₂ dihindari: ${idn(c.parsed.y, 0)} ton` };
+    draw("cCo2", "bar", { labels: e.tco2.map((r) => String(r.year)), datasets: [{ label: "CO₂", data: co, backgroundColor: css("--series-3"), borderRadius: 4, borderSkipped: "start", maxBarThickness: 28 }] }, o);
+    draw("cDur", "line", { labels: YRS, datasets: [line("Cara kerja dipertahankan", ann(DEF0.plan, "cost_idx_real"), css("--series-1")), line("Program dihentikan 2031", ann(DEF0.relapse, "cost_idx_real"), css("--series-2"), true, 2),
+      line("Tanpa tindakan", ann(DEF0.base, "cost_idx_real"), css("--baseline"), false, 2)] }, baseOpts((v) => idn(v, 0), 90, 125));
+    const S = DATA.sd.social, rows = [["Engineer Software & AI L3+ (dari 30)", "digital_l3", (v) => idn(v)], ["Know-how kritis terdokumentasi", "know_how", pct],
+      ["Proses bergantung 1–2 senior", "senior_dep", pct], ["Engineer baru hingga mandiri (bulan)", "ramp_months", (v) => idn(v)], ["Waktu engineer untuk perbaikan", "improve", pct],
+      ["Ide terimplementasi per engineer", "ideas", (v) => idn(v, 2)]];
+    $("tSocial").innerHTML = "<table><tr><th>Ukuran</th><th class='n'>2025</th><th class='n'>2030</th><th class='n'>2035</th></tr>" +
+      rows.map(([lab, k, f]) => `<tr><td>${lab}</td>${["2025", "2030", "2035"].map((y) => `<td class="n">${f(S[y][k])}</td>`).join("")}</tr>`).join("") +
+      "</table><p class='note' style='margin-top:8px'>Tanpa PHK: hanya 50% waktu operator yang dibebaskan dihitung sebagai kas; sisanya dialihkan ke kaizen.</p>";
   }
 
-  renderMC();
-  update();
-  const rerender = () => { resetCharts(); update(); };
+  // ---------------------------------------------------------------- ROADMAP, KPI, Q&A
+  function renderRoad() {
+    const R = DATA.road;
+    $("tPhase").innerHTML = mdTable(R.phases); $("tGate").innerHTML = mdTable(R.gate); $("tDays").innerHTML = mdTable(R.days);
+    $("tCap").innerHTML = mdTable(R.capability); $("tBuild").innerHTML = mdTable(R.build);
+    const [head, ...body] = R.risks;
+    const si = head.indexOf("Skor");
+    $("tRisk").innerHTML = `<table><tr>${head.map((h) => `<th>${esc(h)}</th>`).join("")}</tr>` + body.map((r) => `<tr>${r.map((c, i) => {
+      if (i !== si) return `<td>${esc(c)}</td>`;
+      const v = +c, cls = v >= 15 ? "bad" : v >= 10 ? "warn" : "good";
+      return `<td><span class="risk pill ${cls}">${esc(c)}</span></td>`;
+    }).join("")}</tr>`).join("") + "</table>";
+  }
+  function renderKpi() {
+    const K = DATA.kpi;
+    $("tKpiO").innerHTML = mdTable(K.outcome); $("tKpiD").innerHTML = mdTable(K.driver); $("tKpiS").innerHTML = mdTable(K.sustain); $("tKpiF").innerHTML = mdTable(K.fixes);
+  }
+  function renderQa() {
+    const Q = DATA.qa;
+    $("spoken").innerHTML = Q.spoken.map((s) => `<div><strong>${esc(s.q)}</strong><blockquote>${esc(s.a)}</blockquote></div>`).join("");
+    const [head, ...bank] = Q.bank;
+    const draw2 = () => {
+      const term = $("qaSearch").value.trim().toLowerCase();
+      const items = bank.filter((r) => !term || r.join(" ").toLowerCase().includes(term));
+      $("qaList").innerHTML = items.length ? items.map((r) => `<details class="qa"><summary>${esc(r[0])}. ${esc(r[1])}</summary><p style="margin:6px 0">${esc(r[2])}</p><p class="note">Bukti: ${esc(r[3])} · Pemilik: ${esc(r[4])}</p></details>`).join("")
+        : `<p class="note">Tidak ada pertanyaan yang cocok dengan "${esc(term)}".</p>`;
+    };
+    $("qaSearch").oninput = draw2; draw2();
+    $("lenses").innerHTML = Object.entries(Q.lenses).map(([k, rows]) => `<details><summary style="font-size:15px;color:var(--ink);font-weight:500">${esc(k)}</summary><div class="tablewrap" style="margin-top:8px">${mdTable(rows)}</div></details>`).join("") +
+      `<details open><summary style="font-size:15px;color:var(--ink);font-weight:500">Aturan tally: serangan fatal di dua lensa</summary><div class="tablewrap" style="margin-top:8px">${mdTable(Q.tally)}</div></details>`;
+  }
+
+  // ---------------------------------------------------------------- tabs
+  const RENDER = { ringkasan: renderSummary, diagnosis: renderDiag, solusi: renderScore, bukti: renderProof, simulator: renderSim, finansial: renderFin,
+    stres: renderStress, keberlanjutan: renderSus, roadmap: renderRoad, kpi: renderKpi, qa: renderQa };
+  let current = null;
+  function show(name) {
+    if (!RENDER[name]) name = "ringkasan";
+    current = name;
+    document.querySelectorAll("section[data-tab]").forEach((s) => { s.hidden = s.dataset.tab !== name; });
+    document.querySelectorAll("#rail a").forEach((a) => { if (a.getAttribute("href") === "#" + name) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+    RENDER[name]();
+    Object.values(charts).forEach((c) => { if (c.canvas.offsetParent) c.resize(); });
+    store.set("clk-tab", name);
+  }
+  window.addEventListener("hashchange", () => show(location.hash.slice(1)));
+  show(location.hash.slice(1) || store.get("clk-tab", "ringkasan"));
+  const rerender = () => { Object.values(charts).forEach((c) => c.destroy()); for (const k in charts) delete charts[k]; show(current); };
   try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", rerender); } catch (e) {}
   new MutationObserver(rerender).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 })();
