@@ -8,8 +8,8 @@
    - "Buat 20 pertanyaan juri beserta jawabannya (Stage 8)."
 4. Untuk menjalankan model: `pip install openpyxl numpy matplotlib`, lalu `cd model && python build_model.py && python run_tests.py && python sd_model.py` (model system dynamics sekitar 5 menit; `--quick` tanpa Monte Carlo).
 5. Membangun deck: pasang `pptxgenjs` (npm) di folder mana pun, lalu `NODE_PATH=<folder>/node_modules node outputs/build_deck.js`.
-7. Dashboard simulator: `node dashboard/check_parity.js && python dashboard/build_dashboard.py`, lalu buka `dashboard/index.html`. Bila `model/sd_model.py` diubah, ubah `dashboard/sd_model.js` dengan cara yang sama; cek paritas akan gagal bila keduanya berbeda.
 6. Cek bahwa semua angka di proposal, storyline, KPI, Q&A, dan deck cocok dengan model: `pip install "markitdown[pptx]"`, lalu `python work/8_tieout.py`.
+7. Dashboard simulator: `node dashboard/check_parity.js && python dashboard/build_dashboard.py`, lalu buka `dashboard/index.html`. Bila `model/sd_model.py` diubah, ubah `dashboard/sd_model.js` dengan cara yang sama; cek paritas akan gagal bila keduanya berbeda.
 
 ## Hasil Stage 2–8
 
