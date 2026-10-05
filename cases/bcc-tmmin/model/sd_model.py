@@ -127,6 +127,8 @@ POLICIES = {
                         hc=True, firewall=True, protect=0.40),
     "clk_v2_fast": dict(label="CLK v2, gate pertengahan 2027", loop=True, academy=True, ideas=True,
                         sprints=True, hc=True, firewall=True, ratchet=True, phasing=FAST, gate_at=0.75),
+    "clk_v2_front": dict(label="CLK v2, belanja di awal + gate", loop=True, academy=True, ideas=True,
+                         sprints=True, hc=True, firewall=True, ratchet=True, phasing=FRONT),
     "clk_v2_late": dict(label="CLK v2, terlambat 1 tahun", loop=True, academy=True, ideas=True,
                         sprints=True, hc=True, firewall=True, ratchet=True, delay=1.0),
     "clk_v2_relapse": dict(label="CLK v2, program dihentikan 2031", loop=True, academy=True,
@@ -137,12 +139,12 @@ POLICIES = {
 def firewall_level(t, pol):
     """Protected improvement share. CLK v2 protects the norm (30%) from the start;
     the ratchet in simulate() then locks in whatever the loops free on top.
-    Protecting 35-40% was tested and dropped: it costs ~Rp1-5 B of 2026-30 NPV in
+    Protecting 35-40% was tested and dropped: it costs ~Rp3-4 B of 2026-30 NPV in
     unserved fires for little extra (see work/5_tests.md)."""
     s = START + pol.get("delay", 0.0)
     if not pol.get("firewall") or t < s or t >= pol.get("end", 99e9):
         return 0.0
-    return pol.get("protect", 0.30)
+    return pol.get("protect", 0.30) * min(1.0, (t - s) / 0.5)   # phased in over six months
 
 
 def capex_target(t, pol, phasing):
@@ -220,7 +222,10 @@ def simulate(p, pol, phasing=PHASING, gate=True):
             h = h25 - p["cash_conv"] * (h25 - h)
         esc_f = (1 + FACT["esc"]) ** (t - T0)
         maint = 1 - p["maint_var"] + p["maint_var"] * down
-        real = 100 * (SPLIT["labor"] * h + SPLIT["energy"] * energy + SPLIT["maint"] * maint
+        # constant 2025 prices: labor and energy held at their 2025 escalation, so the
+        # index equals the nominal one in 2025 and compares with build_model.py's 96.9
+        esc_25 = (1 + FACT["esc"]) ** 2
+        real = 100 * (SPLIT["labor"] * h * esc_25 + SPLIT["energy"] * energy * esc_25 + SPLIT["maint"] * maint
                       + SPLIT["dep"] + SPLIT["scrap"] * scrap)
         nominal = 100 * (SPLIT["labor"] * h * esc_f + SPLIT["energy"] * energy * esc_f
                          + SPLIT["maint"] * maint + SPLIT["dep"] + SPLIT["scrap"] * scrap)
@@ -414,12 +419,13 @@ UNCERTAIN = {  # (low, mode, high) triangular
 }
 
 
-def monte_carlo(p, n=1500, seed=2026, policy="clk_v2", phasing=PHASING, gate=True):
+def monte_carlo(p, n=1500, seed=2026, policy="clk_v2", phasing=PHASING, gate=True, over=None):
     rng = np.random.default_rng(seed)
+    ranges = dict(UNCERTAIN, **(over or {}))
     res = []
     for _ in range(n):
         q = dict(p)
-        for k, (a, m, b) in UNCERTAIN.items():
+        for k, (a, m, b) in ranges.items():
             q[k] = rng.triangular(a, m, b)
         q = calibrate_fast(q)
         base = simulate(q, POLICIES["do_nothing"])
@@ -475,7 +481,7 @@ def check(p, runs, econ):
 
 
 # ---------------------------------------------------------------- charts
-def charts(runs, mc, mc_v1, sust):
+def charts(runs, mcs, sust):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -487,13 +493,14 @@ def charts(runs, mc, mc_v1, sust):
                          "axes.spines.top": False, "axes.spines.right": False})
     out_dir = HERE.parent / "outputs" / "charts"
 
-    def line_fig(key, title, ylab, keys, fname, scale=1.0, until=2035, ref=None):
+    def line_fig(key, title, ylab, keys, fname, scale=1.0, until=2035, ref=None, pct=False):
         fig, ax = plt.subplots(figsize=(7.2, 4.0), dpi=200)
         for k in keys:
             o = runs[k]
             m = o["t"] <= until + 1
             ax.plot(o["t"][m], o[key][m] * scale, color=col[k], lw=2, label=POLICIES[k]["label"])
-            ax.annotate(f"{o[key][m][-1] * scale:.0f}" if scale != 1 or o[key][m][-1] > 5 else f"{o[key][m][-1]:.2f}",
+            last = o[key][m][-1] * scale
+            ax.annotate(f"{last:.0%}" if pct else (f"{last:.0f}" if last > 5 else f"{last:.2f}"),
                         (o["t"][m][-1], o[key][m][-1] * scale), xytext=(4, 0), textcoords="offset points",
                         color=ink2, fontsize=8, va="center")
         if ref:
@@ -512,27 +519,41 @@ def charts(runs, mc, mc_v1, sust):
 
     main = ["do_nothing", "tech_only", "people_only", "clk_v2"]
     line_fig("cost_idx_real", "Indeks biaya konversi pada harga 2025: hanya CLK v2 yang terus turun",
-             "indeks (2023 = 100, tanpa eskalasi)", main, "fig_sd_cost.png")
+             "indeks biaya, harga konstan 2025 (skala Ex.3: 2025 = 106)", main, "fig_sd_cost.png")
     line_fig("scrap", "Indeks scrap: kamera saja menaikkan scrap, loop tertutup memangkasnya",
              "indeks (2023 = 1)", main, "fig_sd_scrap.png")
-    line_fig("I", "Waktu engineer untuk perbaikan: keluar dari jebakan firefighting",
-             "porsi waktu", main, "fig_sd_time.png", ref=[(0.30, "norma 30%")])
-    line_fig("cost_idx_real", "Ketahanan hasil: menarik waktu perbaikan pada 2031 membuat biaya naik lagi",
-             "indeks (2023 = 100, tanpa eskalasi)", ["do_nothing", "clk_v2", "clk_v2_relapse"],
+    line_fig("I", "Waktu engineer untuk perbaikan (beli teknologi = tanpa tindakan)",
+             "porsi waktu", ["do_nothing", "people_only", "clk_v2"], "fig_sd_time.png",
+             ref=[(0.30, "norma 30%")], pct=True)
+    line_fig("cost_idx_real", "Bila program dihentikan 2031, biaya naik lagi",
+             "indeks biaya, harga konstan 2025 (skala Ex.3: 2025 = 106)", ["do_nothing", "clk_v2", "clk_v2_relapse"],
              "fig_sd_durability.png")
-    # MC histogram, two policies on one axis (same unit)
-    fig, ax = plt.subplots(figsize=(7.2, 4.0), dpi=200)
-    bins = np.linspace(min(mc_v1["npv"].min(), mc["npv"].min()), max(mc_v1["npv"].max(), mc["npv"].max()), 45)
-    ax.hist(mc_v1["npv"], bins=bins, color=col["clk_v1"], alpha=0.55, label="CLK v1 (tanpa perlindungan waktu)",
-            edgecolor="white", linewidth=0.6)
-    ax.hist(mc["npv"], bins=bins, color=col["clk_v2"], alpha=0.75, label="CLK v2", edgecolor="white", linewidth=0.6)
+    # Monte Carlo: P5-P95 range and median per strategy (one axis, one unit)
+    ID = {"CLK v2, pilot-light + gate": "Rencana: pilot-light + gate",
+          "CLK v2, pilot-light, no gate": "Pilot-light tanpa gate",
+          "CLK v2, front-loaded + gate": "Belanja di awal + gate",
+          "CLK v2, front-loaded, no gate": "Belanja di awal tanpa gate",
+          "FAILURE (adoption 20-60%): pilot-light + gate": "Loop gagal: pilot-light + gate",
+          "FAILURE (adoption 20-60%): front-loaded + gate": "Loop gagal: belanja di awal + gate",
+          "CLK v1 (no protected time) + gate": "Tanpa perlindungan waktu (v1)",
+          "CLK v2 protecting 40% + gate": "Lindungi 40% waktu",
+          "CLK v2, 1 year late + gate": "Rencana, terlambat 1 tahun"}
+    rows = [(ID[lab], m) for lab, m in mcs.items() if lab in ID]
+    fig, ax = plt.subplots(figsize=(8.4, 0.48 * len(rows) + 1.3), dpi=200)
+    for i, (lab, mm) in enumerate(reversed(rows)):
+        lo, mid, hi = np.percentile(mm["npv"], [5, 50, 95])
+        c = col["clk_v2"] if lab.startswith("Rencana:") else ink2
+        ax.plot([lo, hi], [i, i], color=c, lw=2, solid_capstyle="round")
+        ax.plot([mid], [i], "o", color=c, ms=7, mec="white", mew=1.5)
+        ax.text(hi + 1.5, i, f"P(NPV>0) {(mm['npv'] > 0).mean():.0%}", va="center", fontsize=8, color=ink2)
+    ax.set_yticks(range(len(rows)))
+    ax.set_yticklabels([lab for lab, _ in reversed(rows)], fontsize=8, color=ink)
     ax.axvline(0, color=ink, lw=1)
-    ax.set_title("NPV 2026-2030 dari 1.500 simulasi system dynamics", loc="left", color=ink,
-                 fontsize=11, fontweight="bold")
-    ax.set_xlabel("NPV (Rp miliar, 10%)")
-    ax.set_ylabel("jumlah simulasi")
-    ax.grid(axis="y", color=grid, lw=0.8)
-    ax.legend(frameon=False, fontsize=8)
+    ax.set_xlabel("NPV 2026-2030, Rp miliar (garis P5-P95, titik median)")
+    ax.set_title("NPV per strategi, 1.500 simulasi", loc="left",
+                 color=ink, fontsize=11, fontweight="bold")
+    ax.grid(axis="x", color=grid, lw=0.8)
+    ax.set_xlim(right=ax.get_xlim()[1] + 18)
     fig.tight_layout()
     fig.savefig(out_dir / "fig_sd_mc.png")
     plt.close(fig)
@@ -640,7 +661,7 @@ def main(quick=False):
                    summary=summary, econ={k: {kk: vv for kk, vv in v.items() if kk != "rows"} for k, v in econ.items()},
                    clk_v2_rows=e["rows"], env=sust["env"], social=sust["social"])
     if not quick:
-        print("\n== Monte Carlo (1,500 runs each, 17 uncertain inputs, triangular)")
+        print(f"\n== Monte Carlo (1,500 runs each, {len(UNCERTAIN)} uncertain inputs, triangular)")
         mc = monte_carlo(p)
         mc_v1 = monte_carlo(p, policy="clk_v1")
         mc_ng = monte_carlo(p, gate=False)
@@ -648,11 +669,14 @@ def main(quick=False):
         mc_late = monte_carlo(p, policy="clk_v2_late")
         mc_hard = monte_carlo(p, policy="clk_v2_hard")
         mc_tech = monte_carlo(p, policy="tech_only", gate=False)
-        mc_fast = monte_carlo(p, policy="clk_v2_fast")
-        mc_frg = monte_carlo(p, phasing=FRONT)
+        mc_frg = monte_carlo(p, policy="clk_v2_front")
+        fail = {"adopt": (0.2, 0.4, 0.6)}   # outside both models' 60% adoption floor: the loop mostly fails
+        mc_fail = monte_carlo(p, n=800, over=fail)
+        mc_fail_fr = monte_carlo(p, n=800, policy="clk_v2_front", over=fail)
         mcs = {"CLK v2, pilot-light + gate": mc, "CLK v2, pilot-light, no gate": mc_ng,
-               "CLK v2, fast: gate mid-2027 + quicker phase 2": mc_fast,
-               "CLK v2, front-loaded + gate": mc_frg, "CLK v2, front-loaded, no gate": mc_fr, "CLK v1 (no protected time) + gate": mc_v1,
+               "CLK v2, front-loaded + gate": mc_frg, "CLK v2, front-loaded, no gate": mc_fr,
+               "FAILURE (adoption 20-60%): pilot-light + gate": mc_fail,
+               "FAILURE (adoption 20-60%): front-loaded + gate": mc_fail_fr, "CLK v1 (no protected time) + gate": mc_v1,
                "CLK v2 protecting 40% + gate": mc_hard, "CLK v2, 1 year late + gate": mc_late,
                "Buy technology only": mc_tech}
         results["mc"] = {}
@@ -673,7 +697,7 @@ def main(quick=False):
         for k, lo, hi in tor[:8]:
             print(f"  {k:<14} {lo:6.1f} .. {hi:6.1f}")
         results["tornado"] = tor
-        charts(runs, mc, mc_v1, sust)
+        charts(runs, mcs, sust)
         print("\n  charts saved to outputs/charts/fig_sd_*.png")
     (HERE / "sd_results.json").write_text(json.dumps(results, indent=1, default=float))
     print("\nall checks passed; results in model/sd_results.json")
