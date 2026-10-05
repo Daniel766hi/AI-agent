@@ -5,7 +5,7 @@ Every number is read from the file that produces it, never retyped:
   model/run_tests.py stdout    spreadsheet stress test, tornado, sealer simulation
   work/2_diagnosis_calc.py     heat map scores and the cost bridge
   work/4_scoring.py            option scores, weights, random-weight results
-  work/6_roadmap.md, 7_kpis.md, 8_qa.md   tables shown as text
+  work/6_roadmap.md, 7_kpis.md   tables shown as text
 Run from the case root:
   node dashboard/check_parity.js && python dashboard/build_dashboard.py
 """
@@ -86,16 +86,6 @@ def section(tables, startswith):
     return tables[key]
 
 
-def blockquotes(path, startswith):
-    text = Path(path).read_text()
-    part = text[text.index(startswith):]
-    part = part[:part.index("\n## ", 5)] if "\n## " in part[5:] else part
-    items = []
-    for m in re.finditer(r"\*\*(Q\d+ — .*?)\*\*\n> (.*?)\n", part):
-        items.append({"q": m.group(1), "a": m.group(2).strip('"“”')})
-    return items
-
-
 def main():
     sd = json.loads((ROOT / "model" / "sd_results.json").read_text())
     xl = stress_test()
@@ -103,7 +93,6 @@ def main():
     score = quiet_run(ROOT / "work" / "4_scoring.py")
     road = md_tables(ROOT / "work" / "6_roadmap.md")
     kpi = md_tables(ROOT / "work" / "7_kpis.md")
-    qa = md_tables(ROOT / "work" / "8_qa.md")
     facts = md_tables(ROOT / "data" / "facts.md")
 
     data = {
@@ -138,10 +127,6 @@ def main():
         },
         "kpi": {"outcome": section(kpi, "1. KPI hasil")[0], "driver": section(kpi, "2. KPI pendorong")[0],
                 "sustain": section(kpi, "3. KPI keberlanjutan")[0], "fixes": section(kpi, "4. Koreksi")[0]},
-        "qa": {"bank": section(qa, "2. Bank")[0],
-               "lenses": {k: v[0] for k, v in qa.items() if k.startswith("Lensa")},
-               "tally": section(qa, "Aturan tally")[0],
-               "spoken": blockquotes(ROOT / "work" / "8_qa.md", "## 3.")},
     }
     html = (HERE / "template.html").read_text()
     for anchor, value in (("/*__SD_MODEL__*/", (HERE / "sd_model.js").read_text()),

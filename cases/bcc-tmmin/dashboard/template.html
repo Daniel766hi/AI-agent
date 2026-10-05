@@ -108,7 +108,6 @@ th { font-weight: 600; color: var(--muted); font-size: 12.5px; text-transform: u
 td.n, th.n { text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
 tr.sel td { background: var(--andon-soft); }
 details summary { cursor: pointer; font-size: 13px; color: var(--muted); margin-top: 8px; }
-details.qa summary { font-size: 15px; color: var(--ink); font-weight: 500; margin: 0; padding: 4px 0; }
 .gate { display: grid; gap: 8px; }
 .gate .row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 13.5px; }
 .mark { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; }
@@ -151,7 +150,7 @@ blockquote { margin: 6px 0 0; padding-left: 12px; border-left: 3px solid var(--a
     <div>
       <div class="eyebrow">M3C 2026 · TMMIN · Closed-Loop Kaizen</div>
       <h1>Simulator Closed-Loop Kaizen</h1>
-      <p class="lede">Semua hasil kasus di satu tempat: diagnosis, solusi, bukti, model finansial, model system dynamics, uji stres, keberlanjutan, roadmap, KPI, dan Q&amp;A. Tab Simulator dan Finansial menjalankan ulang model di browser. Exhibit 3–9 adalah data dummy panitia.</p>
+      <p class="lede">Semua hasil kasus di satu tempat: diagnosis, solusi, bukti, model finansial, model system dynamics, uji stres, keberlanjutan, roadmap, dan KPI. Tab Simulator dan Finansial menjalankan ulang model di browser. Exhibit 3–9 adalah data dummy panitia.</p>
     </div>
     <div class="chips" aria-label="Parameter tetap dari casebook">
       <span class="chip">Diskonto 10%</span><span class="chip">Eskalasi 4%/thn</span><span class="chip">Umur teknologi 5 thn</span><span class="chip">175.000 unit · Rp3,2 jt/unit</span>
@@ -161,7 +160,7 @@ blockquote { margin: 6px 0 0; padding-left: 12px; border-left: 3px solid var(--a
   <nav class="tabs" aria-label="Bagian dashboard"><div class="rail" id="rail">
     <a href="#ringkasan">Ringkasan</a><a href="#diagnosis">Diagnosis</a><a href="#solusi">Solusi</a><a href="#bukti">Bukti sealer</a>
     <a href="#simulator">Simulator SD</a><a href="#finansial">Finansial</a><a href="#stres">Uji stres</a><a href="#keberlanjutan">Keberlanjutan</a>
-    <a href="#roadmap">Roadmap &amp; gate</a><a href="#kpi">KPI</a><a href="#qa">Q&amp;A juri</a>
+    <a href="#roadmap">Roadmap &amp; gate</a><a href="#kpi">KPI</a>
   </div></nav>
 
   <!-- ============================================================ RINGKASAN -->
@@ -421,23 +420,6 @@ blockquote { margin: 6px 0 0; padding-left: 12px; border-left: 3px solid var(--a
     <div class="grid2">
       <div class="panel"><div class="card-h"><h2>KPI keberlanjutan</h2></div><div class="tablewrap" id="tKpiS"></div></div>
       <div class="panel"><div class="card-h"><h2>Koreksi terbuka terhadap draf</h2><p>Target yang diturunkan agar konsisten dengan model.</p></div><div class="tablewrap" id="tKpiF"></div></div>
-    </div>
-  </section>
-
-  <!-- ============================================================ Q&A -->
-  <section data-tab="qa" class="stack" hidden>
-    <div class="panel">
-      <div class="card-h"><h2>Tiga pertanyaan tersulit: jawaban lisan 20 detik</h2></div>
-      <div id="spoken" style="display:grid;gap:14px"></div>
-    </div>
-    <div class="panel">
-      <div class="card-h"><h2>Bank Q&amp;A (20 pertanyaan)</h2><p>Cari kata kunci, misalnya "gate", "pesaing", atau "CO₂".</p></div>
-      <input type="search" id="qaSearch" placeholder="Cari pertanyaan atau jawaban" aria-label="Cari Q&amp;A">
-      <div id="qaList" style="display:grid;gap:6px;margin-top:12px"></div>
-    </div>
-    <div class="panel">
-      <div class="card-h"><h2>Serangan panel juri per sudut pandang</h2><p>Serangan yang ditandai fatal oleh dua lensa wajib mengubah jawaban.</p></div>
-      <div id="lenses" style="display:grid;gap:10px"></div>
     </div>
   </section>
 
@@ -821,24 +803,9 @@ const DATA = /*__DATA__*/;
     const K = DATA.kpi;
     $("tKpiO").innerHTML = mdTable(K.outcome); $("tKpiD").innerHTML = mdTable(K.driver); $("tKpiS").innerHTML = mdTable(K.sustain); $("tKpiF").innerHTML = mdTable(K.fixes);
   }
-  function renderQa() {
-    const Q = DATA.qa;
-    $("spoken").innerHTML = Q.spoken.map((s) => `<div><strong>${esc(s.q)}</strong><blockquote>${esc(s.a)}</blockquote></div>`).join("");
-    const [head, ...bank] = Q.bank;
-    const draw2 = () => {
-      const term = $("qaSearch").value.trim().toLowerCase();
-      const items = bank.filter((r) => !term || r.join(" ").toLowerCase().includes(term));
-      $("qaList").innerHTML = items.length ? items.map((r) => `<details class="qa"><summary>${esc(r[0])}. ${esc(r[1])}</summary><p style="margin:6px 0">${esc(r[2])}</p><p class="note">Bukti: ${esc(r[3])} · Pemilik: ${esc(r[4])}</p></details>`).join("")
-        : `<p class="note">Tidak ada pertanyaan yang cocok dengan "${esc(term)}".</p>`;
-    };
-    $("qaSearch").oninput = draw2; draw2();
-    $("lenses").innerHTML = Object.entries(Q.lenses).map(([k, rows]) => `<details><summary style="font-size:15px;color:var(--ink);font-weight:500">${esc(k)}</summary><div class="tablewrap" style="margin-top:8px">${mdTable(rows)}</div></details>`).join("") +
-      `<details open><summary style="font-size:15px;color:var(--ink);font-weight:500">Aturan tally: serangan fatal di dua lensa</summary><div class="tablewrap" style="margin-top:8px">${mdTable(Q.tally)}</div></details>`;
-  }
-
   // ---------------------------------------------------------------- tabs
   const RENDER = { ringkasan: renderSummary, diagnosis: renderDiag, solusi: renderScore, bukti: renderProof, simulator: renderSim, finansial: renderFin,
-    stres: renderStress, keberlanjutan: renderSus, roadmap: renderRoad, kpi: renderKpi, qa: renderQa };
+    stres: renderStress, keberlanjutan: renderSus, roadmap: renderRoad, kpi: renderKpi };
   let current = null;
   function show(name) {
     if (!RENDER[name]) name = "ringkasan";
