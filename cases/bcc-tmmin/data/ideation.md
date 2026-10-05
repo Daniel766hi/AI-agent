@@ -1,3 +1,5 @@
+> **Catatan:** dokumen ini adalah ideation awal. Versi terbaru (12 opsi, skoring dengan uji bobot, CLK v2 dengan waktu perbaikan yang dilindungi) ada di `work/3_options.md` dan `work/4_scoring.md`.
+
 # Ideation
 
 ## Ide terpilih: Closed-Loop Kaizen

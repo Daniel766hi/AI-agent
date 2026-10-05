@@ -6,7 +6,13 @@
    - "Pakai skill case-solution-design, jalankan Stage 2 dan buat issue tree baru."
    - "Ubah asumsi scrap jadi 30%, jalankan ulang model dan simulasi, lalu update angka di proposal."
    - "Buat 20 pertanyaan juri beserta jawabannya (Stage 8)."
-4. Untuk menjalankan model: `pip install openpyxl numpy`, lalu `cd model && python build_model.py && python run_tests.py`.
+4. Untuk menjalankan model: `pip install openpyxl numpy matplotlib`, lalu `cd model && python build_model.py && python run_tests.py && python sd_model.py` (model system dynamics sekitar 5 menit; `--quick` tanpa Monte Carlo).
+5. Membangun deck: pasang `pptxgenjs` (npm) di folder mana pun, lalu `NODE_PATH=<folder>/node_modules node outputs/build_deck.js`.
+6. Cek bahwa semua angka di proposal, storyline, KPI, Q&A, dan deck cocok dengan model: `pip install "markitdown[pptx]"`, lalu `python work/8_tieout.py`.
+
+## Hasil Stage 2–8
+
+Semua ada di `work/` (satu file per stage). Ringkasan jawaban dan angka utama ada di `CLAUDE.md`. Deliverable: `outputs/proposal_draft.md` (isi paper) dan `outputs/deck_closed_loop_kaizen.pptx` (deck).
 
 ## Skill yang terpasang
 
@@ -32,5 +38,6 @@ Sumber dan lisensi skill dari GitHub ada di `.claude/skills/THIRD_PARTY.md`.
 
 Isi folder:
 - `data/` — masalah, fakta casebook, riset, ideation
-- `model/` — workbook Excel, skrip model, skrip simulasi
+- `model/` — workbook Excel, skrip model finansial, simulasi sealer, model system dynamics (`sd_model.py`)
+- `work/` — keluaran Stage 2–8 dan skrip cek silang angka
 - `outputs/` — draf proposal, grafik, template Word

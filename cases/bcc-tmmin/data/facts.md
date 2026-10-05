@@ -127,6 +127,9 @@
 | Penghematan run-rate | Rp48,1 miliar/tahun (8,6% biaya konversi) |
 | NPV (10%, 2026–2030) | Rp27,0 miliar (Rp52,8 M jika nilai sisa peralatan dihitung) |
 | Payback | 2029 |
-| Indeks biaya 2030 | 96,9 (54% selisih tertutup) |
-| Modifikasi varian 2030 | 5,9 bulan |
-| Peluang NPV > 0 (10.000 simulasi, dengan gate) | 85% |
+| Indeks biaya 2030 (harga konstan 2025) | 96,9 (54% selisih ke 89 yang tetap); model system dynamics: 100,8 |
+| Modifikasi varian 2030 | 5,9 bulan tanpa kenaikan kompleksitas; 7,2 bulan di system dynamics (vs 10,4 tanpa tindakan) |
+| Peluang NPV > 0 (10.000 simulasi, dengan gate) | 86% (re-run Oktober 2026; sebelumnya tercatat 85%) |
+| NPV system dynamics vs tanpa tindakan | Rp31,4 miliar; P(NPV>0) 94% dari 1.500 simulasi |
+
+> Angka model terbaru dan cek silangnya: `work/5_tests.md` dan `python work/8_tieout.py`.

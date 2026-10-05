@@ -39,17 +39,19 @@
 
 Temuan: kamera saja menaikkan scrap karena cacat tetap ditemukan terlambat. Kepercayaan operator bernilai: alert yang diabaikan menghilangkan seperlima manfaat. Penurunan terendah di semua uji sensitivitas sekitar 80%.
 
-**Tes 2 — Uji stres finansial (10.000 simulasi, 13 input tidak pasti)**
+**Tes 2 — Uji stres finansial (10.000 simulasi, 13 input tidak pasti)** — dijalankan ulang Oktober 2026; angka di bawah adalah output `model/run_tests.py` saat ini
 
 | Strategi | Peluang NPV > 0 | NPV kasus buruk (P5) |
 |---|---|---|
-| Belanja di awal, tanpa gate | 49% | −Rp32,6 M |
-| Pilot-light, tanpa gate | 73% | −Rp19,3 M |
-| **Pilot-light + gate 2027 (rencana kami)** | **85%** | **−Rp8,9 M** |
-| Rencana kami, penghematan terlambat 1 tahun | 33% | −Rp32,2 M |
-| Terlambat 1 tahun, nilai sisa peralatan dihitung | 88% | −Rp4,2 M |
+| Belanja di awal, tanpa gate | 49% | −Rp32,8 M |
+| Pilot-light, tanpa gate | 73% | −Rp19,4 M |
+| **Pilot-light + gate 2027 (rencana kami)** | **86%** | **−Rp8,4 M** |
+| Rencana kami, penghematan terlambat 1 tahun | 32% | −Rp31,9 M |
+| Terlambat 1 tahun, nilai sisa peralatan dihitung | 88% | −Rp3,8 M |
 
 **Tes 3 — Tornado:** input paling berpengaruh ke NPV adalah besar investasi, tingkat adopsi, dan penurunan scrap.
+
+**Tes 4 — Model system dynamics (`model/sd_model.py`):** lihat `work/5_tests.md`. Ringkas: indeks biaya 2030 pada harga konstan 2025 100,8 (vs 113,9 tanpa tindakan); NPV Rp31,4 M vs tanpa tindakan; P(NPV>0) 94%; terlambat 1 tahun 21%; CO₂ dihindari 1.765 t/tahun pada 2030.
 
 ## Repo GitHub yang bisa dipakai
 

@@ -84,6 +84,17 @@ def main():
         ("SD durability, stopped", idn(s["clk_v2_relapse"]["real2035"]), ["proposal", "tests", "qa"]),
     ]
     texts = {k: p.read_text() for k, p in DOCS.items()}
+    deck = ROOT / "outputs" / "deck_closed_loop_kaizen.pptx"
+    md = subprocess.run(["markitdown", str(deck)], capture_output=True, text=True)
+    assert md.returncode == 0, "markitdown is needed to read the deck: pip install 'markitdown[pptx]'"
+    texts["deck"] = md.stdout
+    DOCS["deck"] = deck
+    deck_checks = ("NPV range, both models", "P(NPV>0) range, both models", "Index range, both models",
+                   "XL P(NPV>0) pilot-light + gate", "XL P(NPV>0) one year late", "XL P(NPV>0) front-loaded",
+                   "XL P(NPV>0) pilot-light no gate", "SD index 2030, constant 2025 prices", "SD do-nothing index 2030",
+                   "SD NPV vs do-nothing", "SD NPV vs frozen 2025", "SD NPV 2026-35 vs frozen", "SD CO2 avoided 2030",
+                   "SD durability, kept", "SD durability, stopped", "SD digital L3+ 2030", "SD know-how 2030")
+    checks = [(l, w, d + (["deck"] if l in deck_checks else [])) for l, w, d in checks]
     misses = []
     for label, want, where in checks:
         forms = {want, want.replace("−", "−Rp", 1)} if want.startswith("−") else {want}

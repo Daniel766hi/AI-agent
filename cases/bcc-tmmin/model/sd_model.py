@@ -659,7 +659,10 @@ def main(quick=False):
 
     results = dict(params={k: (float(v) if isinstance(v, (int, float, np.floating)) else v) for k, v in p.items()},
                    summary=summary, econ={k: {kk: vv for kk, vv in v.items() if kk != "rows"} for k, v in econ.items()},
-                   clk_v2_rows=e["rows"], env=sust["env"], social=sust["social"])
+                   clk_v2_rows=e["rows"], env=sust["env"], social=sust["social"],
+                   series={k: {key: [round(annual(o, key, y), 4) for y in YEARS]
+                               for key in ("cost_idx_real", "cost_idx", "scrap", "I", "ideas", "K", "S")}
+                           for k, o in runs.items()}, years=YEARS)
     if not quick:
         print(f"\n== Monte Carlo (1,500 runs each, {len(UNCERTAIN)} uncertain inputs, triangular)")
         mc = monte_carlo(p)
@@ -699,6 +702,9 @@ def main(quick=False):
         results["tornado"] = tor
         charts(runs, mcs, sust)
         print("\n  charts saved to outputs/charts/fig_sd_*.png")
+    if quick:      # quick runs skip the Monte Carlo, so they must not overwrite the full results
+        print("\nall checks passed (quick: sd_results.json left unchanged)")
+        return
     (HERE / "sd_results.json").write_text(json.dumps(results, indent=1, default=float))
     print("\nall checks passed; results in model/sd_results.json")
 

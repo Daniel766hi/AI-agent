@@ -19,20 +19,43 @@ Answered through 4 sub-questions: (1) future manufacturing vision and biggest ga
 
 ## Current answer (team's chosen idea)
 
-**Closed-Loop Kaizen** — a plant that learns from itself. Three loops with people at the center:
+**Closed-Loop Kaizen v2** — a plant that learns from itself. Three loops with people at the center, plus a time rule:
 1. Quality loop (jidoka): every abnormality returns to the process that caused it within minutes.
 2. Data & equipment loop (standardized work): one in-house interface standard; a new variant becomes configuration.
 3. People & knowledge loop (kaizen, yokoten): operator-built AI tools, one-tap idea channel, captured senior know-how.
+4. Protected improvement time: 30% of engineer/team-leader time, phased in over 6 months, plus a ratchet that locks in time the loops free. Protecting 35-40% was tested and dropped (it costs NPV); protecting nothing makes the gate stop working programs (46% vs 22% of runs).
 
-Pilot: sealer → inspection. Funding: pilot-light (10/15/40/25/10% of Rp80B) with a go/no-go gate at end-2027.
+Pilot: sealer → inspection (final assembly is rollout wave 1). Funding: pilot-light (10/15/40/25/10% of Rp80B) with a go/no-go gate at end-2027 (six criteria in `work/6_roadmap.md`). A mid-2027 gate was tested and is too early.
 
-Headline numbers (base case): cost index 106 → 96.9; variant change 9 → 5.9 months; Software & AI engineers at L3+ 2 → ~14; NPV Rp27B at 10%; payback 2029; P(NPV>0) 85% across 10,000 simulations.
+Headline numbers (each tied out by `python work/8_tieout.py`):
+- Cost index 2030 at constant 2025 prices: **97-101** (spreadsheet 96.9; system dynamics 100.8) vs 113.9 with no action.
+- NPV 2026-30 at 10%: **Rp27-31B** (spreadsheet 27.0; system dynamics 31.4 vs no action). Against a frozen-2025 baseline: -65.4 (2026-30), +17.0 (2026-35). Quote both.
+- P(NPV>0): 86% (spreadsheet, 10,000 runs) / 94% (system dynamics, 1,500 runs). One year late: 32% / 21%. Loop fails: pilot-light 90% vs front-loaded 60%.
+- Variant change 9 → 7.2 months (vs 10.4 no action); Software & AI L3+ 2 → 13.6; know-how 33% → 64%; dependence on 1-2 seniors 48% → 26%.
+- Sustainability: ~1,765 t CO2/yr avoided in 2030; scrap -40% vs no action; 2035 index 98.4 if the way of working is kept, 105.2 if stopped in 2031.
+- Against a competitor that keeps falling, the gap widens 1.7 pts/yr instead of 6.7; the program does **not** close it by 2030. Never claim otherwise.
+
+## Work products
+
+| Path | What |
+|---|---|
+| `work/2_diagnosis.md` + `2_diagnosis_calc.py` | Issue tree, heat map, root cause |
+| `work/3_options.md` | 12 options, integrated idea |
+| `work/4_scoring.md` + `4_scoring.py` | Weighted scoring with random-weight check; pilot choice |
+| `work/5_tests.md` | All three models, stress tests, sustainability, design changes they forced |
+| `work/6_roadmap.md`, `work/7_kpis.md` | Phases, gate, 100 days, risks; KPI targets consistent with the models |
+| `work/8_storyline.md`, `work/8_qa.md` | Action titles; judge-panel attacks and 20-question Q&A |
+| `work/8_tieout.py` | Fails if any headline number in the docs or deck does not match a model |
+| `model/sd_model.py` | System dynamics model (economics + sustainability); `--quick` skips Monte Carlo and leaves `sd_results.json` alone |
+| `outputs/proposal_draft.md` | Paper text for the Word template |
+| `outputs/deck_closed_loop_kaizen.pptx` | Deck, built by `outputs/build_deck.js` from `model/sd_results.json` |
 
 ## Rules for working here
 
 - Use the `case-solution-design` skill when designing, testing or rewriting any part of the solution.
 - Every number must come from `data/facts.md` or `model/`. Never invent figures; label assumptions.
-- After changing assumptions in `model/build_model.py`, run `cd model && python build_model.py && python run_tests.py`, then update the deck and paper numbers.
+- After changing assumptions in `model/build_model.py` or `model/sd_model.py`, run `cd model && python build_model.py && python run_tests.py && python sd_model.py`, rebuild the deck (`NODE_PATH=<pptxgenjs> node outputs/build_deck.js`), then `python work/8_tieout.py` must pass before any number is quoted.
+- If a model contradicts a target or a claim, the model wins: lower the target in the open (see `work/7_kpis.md` §4).
 - Write deliverables in Bahasa Indonesia unless asked otherwise; keep TPS terms (jidoka, kaizen, yokoten).
 - Keep explanations plain enough for a non-engineer judge.
 

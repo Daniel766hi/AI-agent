@@ -1,6 +1,6 @@
 # Stage 8 — Storyline dan Judul Aksi
 
-> Judul slide dibaca berurutan harus menceritakan seluruh jawaban. Setiap angka menyebut sumbernya: **[S2]** `work/2_diagnosis_calc.py`, **[XL]** `model/build_model.py` + `model/run_tests.py`, **[SD]** `model/sd_model.py`, **[SIM]** simulasi sealer di `model/run_tests.py`, **[Ex.n]** casebook. Deck: `outputs/deck_closed_loop_kaizen.pptx` (dibangun oleh `outputs/build_deck.py`).
+> Judul slide dibaca berurutan harus menceritakan seluruh jawaban. Setiap angka menyebut sumbernya: **[S2]** `work/2_diagnosis_calc.py`, **[XL]** `model/build_model.py` + `model/run_tests.py`, **[SD]** `model/sd_model.py`, **[SIM]** simulasi sealer di `model/run_tests.py`, **[Ex.n]** casebook. Deck: `outputs/deck_closed_loop_kaizen.pptx` (dibangun oleh `outputs/build_deck.js`).
 
 ## Ringkasan eksekutif (jawaban + tiga angka + permintaan)
 
