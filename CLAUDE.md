@@ -155,6 +155,7 @@ correct the claim.
 | `web/app.py` | Token-auth dashboard, localhost-bound |
 | `deploy/trading-agent.service` | systemd unit for unattended running |
 | `notebooks/quickstart.ipynb` | Colab run-through on real data, end to end |
+| `cases/bcc-tmmin/` | Separate project: M3C 2026 TMMIN case competition. Not trading code; it has its own CLAUDE.md, model and tests |
 
 Adding a module means adding a row. `tests/test_docs.py` fails otherwise — the
 table drifted silently for seven files before that check existed.

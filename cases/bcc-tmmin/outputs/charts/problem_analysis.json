@@ -1,0 +1,911 @@
+{
+ "ex": {
+  "1": [
+   [
+    "Metrik",
+    "2024",
+    "2025",
+    "Perubahan"
+   ],
+   [
+    "Wholesales (unit)",
+    "865.723",
+    "803.687",
+    "−7,2%"
+   ],
+   [
+    "Retail sales (unit)",
+    "889.680",
+    "833.692",
+    "−6,3%"
+   ]
+  ],
+  "2": [
+   [
+    "Fasilitas",
+    "Lokasi",
+    "Sejak",
+    "Produksi",
+    "Kapasitas/tahun"
+   ],
+   [
+    "Sunter I",
+    "Jakarta Utara",
+    "1973",
+    "Mesin TR dan mesin etanol",
+    "195.000 unit"
+   ],
+   [
+    "Sunter II",
+    "Jakarta Utara",
+    "1977",
+    "Press parts dan casting",
+    "96.000 unit press parts; 10.000 ton casting"
+   ],
+   [
+    "Karawang I",
+    "Karawang",
+    "1998",
+    "Perakitan kendaraan (IMV)",
+    "130.000 unit"
+   ],
+   [
+    "Karawang II",
+    "Karawang",
+    "2013",
+    "Perakitan kendaraan penumpang",
+    "120.000 unit"
+   ],
+   [
+    "Karawang III",
+    "Karawang",
+    "2016",
+    "Casting, machining, perakitan mesin R-NR",
+    "216.000 unit"
+   ]
+  ],
+  "3": [
+   [
+    "Tahun",
+    "TMMIN",
+    "Pemain baru"
+   ],
+   [
+    "2023",
+    "100",
+    "94"
+   ],
+   [
+    "2024",
+    "103",
+    "91"
+   ],
+   [
+    "2025",
+    "106",
+    "89"
+   ]
+  ],
+  "4": [
+   [
+    "Metrik",
+    "2023",
+    "2025"
+   ],
+   [
+    "Scrap (indeks)",
+    "100",
+    "108"
+   ],
+   [
+    "Unplanned downtime (indeks)",
+    "100",
+    "111"
+   ],
+   [
+    "Cacat lolos ke proses hilir (indeks)",
+    "100",
+    "103"
+   ],
+   [
+    "Waktu non-value-added operator (% jam kerja)",
+    "20",
+    "22"
+   ],
+   [
+    "Modifikasi peralatan untuk varian baru (bulan)",
+    "8",
+    "9"
+   ]
+  ],
+  "5": [
+   [
+    "Proses",
+    "Level",
+    "Kondisi"
+   ],
+   [
+    "Press shop",
+    "3",
+    "Ganti die dan cek kualitas panel masih oleh operator"
+   ],
+   [
+    "Casting",
+    "2",
+    "Finishing, handling, inspeksi sebagian manual"
+   ],
+   [
+    "Machining & engine assembly",
+    "3",
+    "Perakitan dan inspeksi sebagian manual"
+   ],
+   [
+    "Body welding: spot welding",
+    "3",
+    "Robot terprogram, terintegrasi"
+   ],
+   [
+    "Body welding: sealer",
+    "2",
+    "Manual/semi-otomatis; belum ada umpan balik kualitas otomatis"
+   ],
+   [
+    "Painting",
+    "3",
+    "Cek kualitas dan perbaikan cacat masih visual manual"
+   ],
+   [
+    "Final assembly",
+    "2",
+    "Sebagian besar manual; variasi varian ditangani operator"
+   ],
+   [
+    "Quality inspection",
+    "1",
+    "Visual manual; kamera AI dari CCTV validasi s.d. Okt 2026"
+   ],
+   [
+    "Intralogistics",
+    "2",
+    "Forklift dan dolly manual; uji AGV/AMR di area pilot"
+   ],
+   [
+    "Maintenance",
+    "2",
+    "Preventif berkala, belum prediktif"
+   ],
+   [
+    "Equipment & system integration",
+    "2",
+    "Point-to-point, tanpa standar antarmuka"
+   ],
+   [
+    "Data integration",
+    "1",
+    "Data peralatan, kualitas, logistik tidak terhubung"
+   ]
+  ],
+  "6A": [
+   [
+    "Metrik",
+    "2023",
+    "2025"
+   ],
+   [
+    "Waktu engineer untuk dukungan rutin & troubleshooting (%)",
+    "62",
+    "65"
+   ],
+   [
+    "Waktu engineer untuk perbaikan & pengembangan baru (%)",
+    "28",
+    "25"
+   ],
+   [
+    "Know-how kritis terdokumentasi (% item)",
+    "35",
+    "33"
+   ],
+   [
+    "Proses kritis yang bergantung pada 1–2 senior (%)",
+    "45",
+    "48"
+   ],
+   [
+    "Waktu engineer baru hingga mandiri (bulan)",
+    "14",
+    "15"
+   ],
+   [
+    "Ide perbaikan per engineer per tahun",
+    "3,1",
+    "2,4"
+   ],
+   [
+    "Ide yang diimplementasikan (% dari yang diajukan)",
+    "35",
+    "28"
+   ]
+  ],
+  "6B": [
+   [
+    "Indikator",
+    "Persentase"
+   ],
+   [
+    "Teknologi membantu, bukan menggantikan",
+    "54%"
+   ],
+   [
+    "Sudah dilatih alat berbasis data",
+    "18%"
+   ],
+   [
+    "Sering mengabaikan alert otomatis",
+    "31%"
+   ],
+   [
+    "Know-how dibagi lewat coaching informal",
+    "71%"
+   ],
+   [
+    "Mau menyumbang ide bila ada kanal mudah",
+    "62%"
+   ]
+  ],
+  "7": [
+   [
+    "Bidang",
+    "Level 1",
+    "Level 2",
+    "Level 3",
+    "Level 4"
+   ],
+   [
+    "Mechanical",
+    "3",
+    "8",
+    "14",
+    "5"
+   ],
+   [
+    "Electrical",
+    "5",
+    "10",
+    "11",
+    "4"
+   ],
+   [
+    "PLC",
+    "7",
+    "11",
+    "9",
+    "3"
+   ],
+   [
+    "Programming",
+    "14",
+    "10",
+    "5",
+    "1"
+   ],
+   [
+    "Software & AI",
+    "20",
+    "8",
+    "2",
+    "0"
+   ]
+  ],
+  "8": [
+   [
+    "Pathway",
+    "2026",
+    "2030 moderat",
+    "2030 agresif"
+   ],
+   [
+    "ICE",
+    "70%",
+    "45%",
+    "30%"
+   ],
+   [
+    "HEV",
+    "25%",
+    "38%",
+    "40%"
+   ],
+   [
+    "PHEV",
+    "3%",
+    "7%",
+    "10%"
+   ],
+   [
+    "BEV",
+    "2%",
+    "10%",
+    "20%"
+   ],
+   [
+    "Total elektrifikasi",
+    "30%",
+    "55%",
+    "70%"
+   ]
+  ],
+  "9": [
+   [
+    "Parameter",
+    "Nilai"
+   ],
+   [
+    "Kapasitas terpasang Karawang I & II",
+    "250.000 unit/tahun"
+   ],
+   [
+    "Utilisasi 2025",
+    "70% (~175.000 unit)"
+   ],
+   [
+    "Biaya konversi per unit 2025",
+    "Rp3,2 juta (tenaga kerja, energi, perawatan, depresiasi, scrap)"
+   ],
+   [
+    "Total biaya konversi 2025",
+    "~Rp560 miliar"
+   ],
+   [
+    "Rentang investasi program 3–5 tahun",
+    "Rp40–120 miliar"
+   ],
+   [
+    "Tingkat diskonto",
+    "10%/tahun"
+   ],
+   [
+    "Umur ekonomis teknologi",
+    "5 tahun"
+   ],
+   [
+    "Eskalasi biaya tenaga kerja & energi",
+    "4%/tahun"
+   ]
+  ]
+ },
+ "drivers": [
+  [
+   "Cabang",
+   "Driver",
+   "Exhibit",
+   "2023",
+   "2025",
+   "Perubahan",
+   "Arah"
+  ],
+  [
+   "A",
+   "Indeks biaya konversi TMMIN",
+   "3",
+   "100",
+   "106",
+   "+6%",
+   "Memburuk"
+  ],
+  [
+   "A",
+   "Indeks biaya pemain baru",
+   "3",
+   "94",
+   "89",
+   "−5%",
+   "Pesaing membaik"
+  ],
+  [
+   "A",
+   "Selisih biaya (poin indeks)",
+   "3",
+   "6",
+   "17",
+   "+11 poin",
+   "Melebar 5,5/tahun"
+  ],
+  [
+   "A1",
+   "Waktu NVA operator (% jam kerja)",
+   "4",
+   "20%",
+   "22%",
+   "+2 poin",
+   "Memburuk"
+  ],
+  [
+   "A2",
+   "Unplanned downtime (indeks)",
+   "4",
+   "100",
+   "111",
+   "+11%",
+   "Memburuk, terbesar"
+  ],
+  [
+   "A3",
+   "Scrap (indeks)",
+   "4",
+   "100",
+   "108",
+   "+8%",
+   "Memburuk"
+  ],
+  [
+   "A4",
+   "Energi",
+   "—",
+   "—",
+   "—",
+   "Tidak ada data",
+   "Celah data"
+  ],
+  [
+   "A5",
+   "Utilisasi Karawang I & II",
+   "9",
+   "—",
+   "70%",
+   "Pasar −7,2% (Ex.1)",
+   "Tekanan eksternal"
+  ],
+  [
+   "B",
+   "Cacat lolos ke hilir (indeks)",
+   "4",
+   "100",
+   "103",
+   "+3%",
+   "Memburuk"
+  ],
+  [
+   "C",
+   "Modifikasi peralatan per varian (bulan)",
+   "4",
+   "8",
+   "9",
+   "+1 bulan",
+   "Memburuk"
+  ],
+  [
+   "C",
+   "Porsi volume elektrifikasi",
+   "8",
+   "30% (2026)",
+   "55–70% (2030)",
+   "+25–40 poin",
+   "Kompleksitas naik"
+  ],
+  [
+   "D1",
+   "Waktu engineer untuk rutin & troubleshooting",
+   "6A",
+   "62%",
+   "65%",
+   "+3 poin",
+   "Memburuk"
+  ],
+  [
+   "D1",
+   "Waktu engineer untuk perbaikan",
+   "6A",
+   "28%",
+   "25%",
+   "−3 poin",
+   "Memburuk"
+  ],
+  [
+   "D2",
+   "Ide per engineer per tahun",
+   "6A",
+   "3,1",
+   "2,4",
+   "−23%",
+   "Memburuk"
+  ],
+  [
+   "D2",
+   "Ide yang diimplementasikan",
+   "6A",
+   "35%",
+   "28%",
+   "−7 poin",
+   "Memburuk"
+  ],
+  [
+   "D2",
+   "Ide terimplementasi per engineer (turunan)",
+   "6A",
+   "1,08",
+   "0,67",
+   "−38%",
+   "Memburuk"
+  ],
+  [
+   "D3",
+   "Know-how kritis terdokumentasi",
+   "6A",
+   "35%",
+   "33%",
+   "−2 poin",
+   "Memburuk"
+  ],
+  [
+   "D3",
+   "Proses kritis bergantung 1–2 senior",
+   "6A",
+   "45%",
+   "48%",
+   "+3 poin",
+   "Memburuk"
+  ],
+  [
+   "D3",
+   "Engineer baru hingga mandiri (bulan)",
+   "6A",
+   "14",
+   "15",
+   "+1 bulan",
+   "Memburuk"
+  ],
+  [
+   "D4",
+   "Engineer Software & AI Level 3+",
+   "7",
+   "—",
+   "2/30 (7%)",
+   "Snapshot",
+   "Celah terdalam"
+  ]
+ ],
+ "whys": [
+  [
+   "#",
+   "Mengapa?",
+   "Jawaban",
+   "Bukti"
+  ],
+  [
+   "1",
+   "Mengapa daya saing TMMIN tergerus?",
+   "Selisih biaya melebar 5,5 poin per tahun; pesaing membaik, TMMIN tidak",
+   "Ex.3"
+  ],
+  [
+   "2",
+   "Mengapa TMMIN tidak membaik?",
+   "Kinerja operasional memburuk di semua indikator, dan ide terimplementasi per engineer turun 38%",
+   "Ex.4, Ex.6A"
+  ],
+  [
+   "3",
+   "Mengapa perbaikan tidak mengimbangi masalah?",
+   "Engineer memakai 65% waktunya untuk masalah rutin yang berulang; cacat baru terlihat di akhir lini, jauh dari penyebabnya",
+   "Ex.6A, Ex.5"
+  ],
+  [
+   "4",
+   "Mengapa masalah yang sama berulang?",
+   "Pelajaran tidak kembali. Hasil inspeksi tidak kembali ke sealer; solusi tetap di kepala senior (48%) dan coaching informal (71%); setiap varian dibangun ulang dari nol (9 bulan)",
+   "Ex.5, Ex.6A, Ex.6B, Ex.4"
+  ],
+  [
+   "5",
+   "Mengapa pelajaran tidak bisa kembali?",
+   "Tidak ada jalur balik yang dirancang: data tidak terhubung (Level 1), peralatan tanpa standar antarmuka (Level 2), tidak ada kanal ide yang mudah, dan hanya 2/30 engineer yang bisa membangun penghubungnya sendiri",
+   "Ex.5, Ex.6B, Ex.7"
+  ]
+ ],
+ "complications": [
+  [
+   "Komplikasi casebook",
+   "Jalur balik yang hilang",
+   "Gejala yang dijelaskan"
+  ],
+  [
+   "1. Biaya & kualitas",
+   "Ke proses penyebab",
+   "Cacat ditemukan terlambat → scrap +8%; downtime +11% karena data peralatan tidak kembali sebagai peringatan dini"
+  ],
+  [
+   "2. Fleksibilitas & sumber kapabilitas",
+   "Ke varian berikutnya",
+   "Tiap varian dirakit ulang point-to-point → 9 bulan; integrasi bergantung pada pihak luar karena kapabilitas internal 2/30"
+  ],
+  [
+   "3. Mindset, pengetahuan, talenta",
+   "Ke standar bersama",
+   "Know-how di kepala senior (48%) → engineer memadamkan masalah berulang (65%) → ide turun dan jarang terimplementasi (−38%)"
+  ]
+ ],
+ "bridge": [
+  [
+   "Komponen",
+   "Kontribusi (poin)",
+   "Dasar"
+  ],
+  [
+   "Eskalasi tenaga kerja & energi 4%/tahun",
+   "+4,2",
+   "Exhibit 9"
+  ],
+  [
+   "Scrap 100 → 108",
+   "+0,8",
+   "Exhibit 4"
+  ],
+  [
+   "Waktu NVA 20% → 22% (lebih banyak jam untuk output yang sama)",
+   "+1,0",
+   "Exhibit 4"
+  ],
+  [
+   "Downtime 100 → 111 (jika biaya perawatan ikut 0–100%)",
+   "+0 s.d. +1,4",
+   "Exhibit 4"
+  ],
+  [
+   "Total terjelaskan",
+   "+6,1 s.d. +7,5",
+   "vs teramati +6,0"
+  ]
+ ],
+ "rivals": [
+  [
+   "Hipotesis tandingan",
+   "Mengapa tidak menjadi akar masalah",
+   "Bukti"
+  ],
+  [
+   "\"Otomasinya kurang; beli lebih banyak robot\"",
+   "Proses Level 3 tetap bermasalah di titik cek manual. Simulasi tim: kamera lebih baik di akhir lini saja menaikkan indeks scrap menjadi 112, karena cacat tetap ditemukan terlambat. Casebook sendiri menyebut teknologi luar mahal dan sulit diintegrasikan",
+   "Ex.5, data/research.md Tes 1"
+  ],
+  [
+   "\"Volume turun, biaya tetap tidak terserap\"",
+   "Berpengaruh pada depresiasi, tetapi pemain baru menghadapi pasar yang sama dan biayanya tetap turun. Faktor ini juga di luar pertanyaan \"cara memproduksi\"",
+   "Ex.1, Ex.3"
+  ],
+  [
+   "\"Karyawan menolak perubahan\"",
+   "54% melihat teknologi sebagai pembantu dan 62% mau menyumbang ide. Yang kurang adalah pelatihan (18%) dan kanal, bukan kemauan",
+   "Ex.6B"
+  ],
+  [
+   "\"Inflasi upah dan energi\"",
+   "Menjelaskan sekitar 4,2 dari 6 poin kenaikan, tetapi pesaing menghadapi tekanan serupa dan tetap turun. Yang bisa dikendalikan adalah produktivitas",
+   "Ex.9, temuan 3.2 [ASUMSI]"
+  ]
+ ],
+ "evidence": [
+  [
+   "#",
+   "Bukti",
+   "Sumber"
+  ],
+  [
+   "1",
+   "Hanya dua fungsi yang berada di Level 1 dari 12 proses: inspeksi dan integrasi data",
+   "Ex.5"
+  ],
+  [
+   "2",
+   "Keduanya masuk tiga besar heat map di 27/27 kombinasi bobot",
+   "Bagian 4"
+  ],
+  [
+   "3",
+   "Scrap naik 8%, sedangkan cacat lolos hanya naik 3%. Cacat makin banyak tertangkap, tetapi tertangkap terlambat. Ini pola khas loop yang terbuka",
+   "Ex.4"
+  ],
+  [
+   "4",
+   "Simulasi: menutup loop menurunkan indeks scrap area pilot 100 → 15–34; kamera saja malah 112",
+   "data/research.md Tes 1"
+  ],
+  [
+   "5",
+   "Fondasi in-house sudah ada: kamera AI dari CCTV selesai divalidasi Oktober 2026",
+   "Ex.5"
+  ]
+ ],
+ "opps": [
+  [
+   "Peluang",
+   "Data",
+   "Artinya untuk solusi"
+  ],
+  [
+   "Kolam ide yang belum tersentuh",
+   "62% operator mau menyumbang ide bila ada kanal mudah, sementara ide per engineer turun ke 2,4",
+   "Sumber perbaikan bisa diperluas dari engineer ke operator"
+  ],
+  [
+   "Kemauan sudah ada, keterampilan belum",
+   "54% melihat teknologi sebagai pembantu, tetapi hanya 18% sudah dilatih (selisih 36 poin)",
+   "Hambatannya pelatihan, bukan penolakan; program bisa langsung mulai dari kelompok yang sudah mau"
+  ],
+  [
+   "Pengetahuan sudah mengalir, hanya belum tercatat",
+   "71% know-how dibagi lewat coaching informal",
+   "Tangkap aliran yang sudah ada, bukan membuat budaya baru"
+  ],
+  [
+   "Fondasi teknik yang kuat",
+   "Mechanical Level 3+ 63%, Electrical 50%; Software & AI hanya 7%",
+   "Pasangkan ahli domain dengan pelatihan digital yang sempit dan cepat, bukan merekrut ilmuwan data dari nol"
+  ],
+  [
+   "Bukti kapabilitas in-house",
+   "Kamera AI dari CCTV dikembangkan sendiri",
+   "TMMIN sudah bisa membangun; tinggal menjadikannya sistem"
+  ],
+  [
+   "Kapasitas menganggur",
+   "Utilisasi 70% → sekitar 75.000 unit/tahun kapasitas Karawang I & II belum terpakai",
+   "Varian elektrifikasi baru bisa masuk ke lini yang ada jika ganti varian cepat, tanpa pabrik baru"
+  ],
+  [
+   "Kepercayaan operator punya nilai rupiah",
+   "Simulasi: 31% alert diabaikan → indeks scrap 34; desain berpusat manusia → 15",
+   "Human-centered bukan sekadar slogan; itu tuas biaya yang terukur"
+  ]
+ ],
+ "links": [
+  [
+   "Mata rantai",
+   "Skor",
+   "Loop yang terbuka"
+  ],
+  [
+   "Final assembly → inspeksi",
+   "37",
+   "Kualitas"
+  ],
+  [
+   "Sealer → inspeksi",
+   "35",
+   "Kualitas"
+  ],
+  [
+   "Equipment integration → data integration",
+   "33",
+   "Data & peralatan"
+  ],
+  [
+   "Maintenance → data integration",
+   "31",
+   "Data & peralatan"
+  ],
+  [
+   "Intralogistics → final assembly",
+   "28",
+   "Aliran material"
+  ],
+  [
+   "Painting → inspeksi",
+   "27",
+   "Kualitas"
+  ]
+ ],
+ "heat": {
+  "Press shop": [
+   3,
+   2,
+   2,
+   2
+  ],
+  "Casting": [
+   2,
+   2,
+   2,
+   1
+  ],
+  "Machining & engine assembly": [
+   3,
+   2,
+   2,
+   2
+  ],
+  "Spot welding": [
+   3,
+   1,
+   1,
+   2
+  ],
+  "Sealer": [
+   2,
+   3,
+   3,
+   1
+  ],
+  "Painting": [
+   3,
+   2,
+   3,
+   1
+  ],
+  "Final assembly": [
+   2,
+   3,
+   2,
+   3
+  ],
+  "Quality inspection": [
+   1,
+   3,
+   3,
+   1
+  ],
+  "Intralogistics": [
+   2,
+   3,
+   1,
+   2
+  ],
+  "Maintenance": [
+   2,
+   3,
+   1,
+   1
+  ],
+  "Equipment & system integr.": [
+   2,
+   2,
+   1,
+   3
+  ],
+  "Data integration": [
+   1,
+   2,
+   2,
+   3
+  ]
+ },
+ "top3": {
+  "Press shop": 0,
+  "Casting": 0,
+  "Machining & engine assembly": 0,
+  "Spot welding": 0,
+  "Sealer": 6,
+  "Painting": 0,
+  "Final assembly": 21,
+  "Quality inspection": 27,
+  "Intralogistics": 0,
+  "Maintenance": 0,
+  "Equipment & system integr.": 0,
+  "Data integration": 27
+ },
+ "calc": {
+  "widen": 5.5,
+  "share_t": 0.5159859260139685,
+  "drift_lo": 1.8256410256410318,
+  "drift_hi": 3.255641025641033,
+  "impl23": 1.085,
+  "impl25": 0.672,
+  "p_esc": 4.243200000000006,
+  "real_t": 0.01685289783889976,
+  "real_n": -0.09173115307444724
+ },
+ "target": {
+  "idx_sd": 100.83858411457241,
+  "idx_dn": 113.9153341721622,
+  "scrap": 78.33751145142807,
+  "esc": 73.33560896186647,
+  "down": 89.76605031995885,
+  "months": 7.245364459856911,
+  "months_dn": 10.364583333333334,
+  "S": 13.591383291837483,
+  "K": 0.6427966752322947,
+  "improve": 0.4103363345627704,
+  "senior": 0.2559068595350724,
+  "ramp": 10.798253616282608
+ }
+}

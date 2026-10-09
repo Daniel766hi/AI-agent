@@ -1,0 +1,825 @@
+<title>Simulator Closed-Loop Kaizen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* Layout: a plant control board for the whole case. A sticky tab rail (one tab per stage of the
+   answer) over a results board; interactive tabs pair a controls panel with live charts. */
+:root {
+  --bg: #f2f5f5; --surface: #ffffff; --surface-2: #e9eff0; --ink: #13232a; --muted: #53656c; --line: #d5dfe1;
+  --andon: #c98a00; --andon-soft: #fbefcf; --andon-ink: #13232a;
+  --good: #1d7a45; --good-soft: #dff1e6; --warn: #9a6400; --warn-soft: #f8ead0; --bad: #b3362b; --bad-soft: #f7e0dd;
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100; --series-5: #e87ba4;
+  --baseline: #8a9599; --grid: #e3e9ea;
+  --f-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1618; --surface: #142125; --surface-2: #1b2b30; --ink: #e5eef0; --muted: #94a7ad; --line: #26383d;
+    --andon: #f0b323; --andon-soft: #3a2f12; --andon-ink: #13232a;
+    --good: #4cc27f; --good-soft: #15301f; --warn: #e3a63a; --warn-soft: #33270f; --bad: #ef7b6f; --bad-soft: #3a1b18;
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500; --series-5: #d55181;
+    --baseline: #7d8a8e; --grid: #22333a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1618; --surface: #142125; --surface-2: #1b2b30; --ink: #e5eef0; --muted: #94a7ad; --line: #26383d;
+  --andon: #f0b323; --andon-soft: #3a2f12; --andon-ink: #13232a;
+  --good: #4cc27f; --good-soft: #15301f; --warn: #e3a63a; --warn-soft: #33270f; --bad: #ef7b6f; --bad-soft: #3a1b18;
+  --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500; --series-5: #d55181;
+  --baseline: #7d8a8e; --grid: #22333a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5; padding: 0 16px; }
+.wrap { max-width: 1320px; margin: 0 auto; padding-block: 20px 48px; }
+h1, h2, h3 { font-family: var(--f-display); font-weight: 600; letter-spacing: 0.01em; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(30px, 4vw, 42px); line-height: 1.05; }
+h2 { font-size: 24px; line-height: 1.15; }
+h3 { font-size: 18px; }
+p { margin: 0; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+header.top { display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: end; justify-content: space-between; margin-bottom: 14px; }
+header.top .lede { max-width: 66ch; color: var(--muted); margin-top: 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); color: var(--muted); font-size: 12.5px; border: 1px solid var(--line); }
+nav.tabs { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 8px; margin-bottom: 14px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+nav.tabs .rail { display: flex; gap: 4px; min-width: max-content; }
+nav.tabs a { font-size: 13.5px; font-weight: 500; color: var(--muted); text-decoration: none; padding: 7px 11px; border-radius: 6px; white-space: nowrap; }
+nav.tabs a:hover { color: var(--ink); background: var(--surface-2); }
+nav.tabs a[aria-current="page"] { color: var(--andon-ink); background: var(--andon); font-weight: 600; }
+.layout { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 980px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; min-width: 0; }
+aside.panel { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 64px); display: grid; gap: 16px; }
+@media (max-width: 980px) { aside.panel { position: static; } }
+.ctl { display: grid; gap: 6px; }
+.ctl label, .ctl .lab { font-size: 13.5px; font-weight: 500; display: flex; justify-content: space-between; gap: 8px; }
+.ctl .val { font-family: var(--f-mono); font-size: 13px; color: var(--ink); background: var(--andon-soft); padding: 0 6px; border-radius: 4px; white-space: nowrap; }
+.ctl small { color: var(--muted); font-size: 12px; line-height: 1.35; }
+input[type=range] { width: 100%; accent-color: var(--andon); }
+input[type=search] { font: inherit; width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg button { font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--andon); border-color: var(--andon); color: var(--andon-ink); font-weight: 600; }
+.seg button:hover { border-color: var(--andon); }
+button:focus-visible, input:focus-visible, a:focus-visible, summary:focus-visible, .track:focus-visible { outline: 2px solid var(--andon); outline-offset: 2px; }
+.reset { font: inherit; font-size: 13px; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; }
+.reset:hover { border-color: var(--andon); }
+.toggle { display: flex; align-items: center; gap: 8px; font-size: 13.5px; cursor: pointer; }
+.toggle input { accent-color: var(--andon); width: 16px; height: 16px; }
+.stack { display: grid; gap: 20px; min-width: 0; }
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 1100px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 460px) { .tiles { grid-template-columns: minmax(0, 1fr); } }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; display: grid; gap: 4px; min-width: 0; align-content: start; }
+.tile .k { font-size: 12.5px; color: var(--muted); }
+.tile .v { font-family: var(--f-display); font-size: 34px; font-weight: 600; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.tile .d { font-size: 12.5px; color: var(--muted); }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; width: fit-content; }
+.pill.good { background: var(--good-soft); color: var(--good); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.bad { background: var(--bad-soft); color: var(--bad); }
+.card-h { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 16px; margin-bottom: 10px; }
+.card-h p { color: var(--muted); font-size: 13.5px; max-width: 72ch; }
+.chartbox { position: relative; height: 330px; }
+.chartbox.sm { height: 220px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 1100px) { .grid3 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 760px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 18px; height: 0; border-top: 3px solid; display: inline-block; }
+.sw.dash { border-top-style: dashed; }
+.box { width: 11px; height: 11px; border-radius: 2px; display: inline-block; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; color: var(--muted); font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.04em; }
+td.n, th.n { text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.sel td { background: var(--andon-soft); }
+details summary { cursor: pointer; font-size: 13px; color: var(--muted); margin-top: 8px; }
+.gate { display: grid; gap: 8px; }
+.gate .row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 13.5px; }
+.mark { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+.mark.ok { background: var(--good-soft); color: var(--good); }
+.mark.no { background: var(--bad-soft); color: var(--bad); }
+.range { display: grid; gap: 10px; }
+.range .r { display: grid; grid-template-columns: minmax(150px, 260px) minmax(0, 1fr) 72px; gap: 10px; align-items: center; font-size: 13px; }
+@media (max-width: 620px) { .range .r { grid-template-columns: minmax(0, 1fr) 64px; } .range .r .track { grid-column: 1 / -1; } }
+.track { position: relative; height: 22px; background: var(--surface-2); border-radius: 4px; }
+.track .zero { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--ink); opacity: 0.6; }
+.track .bar { position: absolute; top: 9px; height: 4px; border-radius: 2px; background: var(--baseline); }
+.track .dot { position: absolute; top: 5px; width: 12px; height: 12px; border-radius: 50%; transform: translateX(-6px); background: var(--baseline); border: 2px solid var(--surface); }
+.r.plan .bar, .r.plan .dot { background: var(--series-1); }
+.r .p { font-family: var(--f-mono); text-align: right; font-variant-numeric: tabular-nums; }
+.tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--bg); padding: 6px 9px; border-radius: 6px; font-size: 12.5px; z-index: 10; max-width: 280px; }
+.answer { font-size: 17px; line-height: 1.55; max-width: 80ch; }
+.answer strong { font-weight: 600; }
+.cards3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 900px) { .cards3 { grid-template-columns: minmax(0, 1fr); } }
+.cardx { background: var(--surface-2); border-radius: 8px; padding: 14px; display: grid; gap: 6px; align-content: start; }
+.cardx h3 { font-size: 17px; }
+.cardx .bad-t { color: var(--bad); font-weight: 600; font-size: 13.5px; }
+.ask { display: grid; gap: 8px; counter-reset: ask; list-style: none; padding: 0; margin: 0; }
+.ask li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: start; counter-increment: ask; }
+.ask li::before { content: counter(ask); width: 26px; height: 26px; border-radius: 50%; background: var(--andon); color: var(--andon-ink); display: grid; place-items: center; font-weight: 700; font-size: 13px; }
+.links { display: flex; flex-wrap: wrap; gap: 8px; }
+.links a { font-size: 13.5px; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); padding: 6px 10px; border-radius: 6px; text-decoration: none; }
+.links a:hover { border-color: var(--andon); }
+.root { font-size: 16px; font-style: italic; max-width: 85ch; }
+.score { font-family: var(--f-mono); font-weight: 600; }
+.risk { display: inline-block; min-width: 30px; text-align: center; border-radius: 4px; padding: 0 6px; font-family: var(--f-mono); font-weight: 600; }
+.foot { font-size: 12.5px; color: var(--muted); display: grid; gap: 6px; max-width: 95ch; margin-top: 24px; }
+.note { font-size: 13px; color: var(--muted); }
+blockquote { margin: 6px 0 0; padding-left: 12px; border-left: 3px solid var(--andon); color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="eyebrow">M3C 2026 · TMMIN · Closed-Loop Kaizen</div>
+      <h1>Simulator Closed-Loop Kaizen</h1>
+      <p class="lede">Semua hasil kasus di satu tempat: diagnosis, solusi, bukti, model finansial, model system dynamics, uji stres, keberlanjutan, roadmap, dan KPI. Tab Simulator dan Finansial menjalankan ulang model di browser. Exhibit 3–9 adalah data dummy panitia.</p>
+    </div>
+    <div class="chips" aria-label="Parameter tetap dari casebook">
+      <span class="chip">Diskonto 10%</span><span class="chip">Eskalasi 4%/thn</span><span class="chip">Umur teknologi 5 thn</span><span class="chip">175.000 unit · Rp3,2 jt/unit</span>
+    </div>
+  </header>
+
+  <nav class="tabs" aria-label="Bagian dashboard"><div class="rail" id="rail">
+    <a href="#ringkasan">Ringkasan</a><a href="#diagnosis">Diagnosis</a><a href="#solusi">Solusi</a><a href="#bukti">Bukti sealer</a>
+    <a href="#simulator">Simulator SD</a><a href="#finansial">Finansial</a><a href="#stres">Uji stres</a><a href="#keberlanjutan">Keberlanjutan</a>
+    <a href="#roadmap">Roadmap &amp; gate</a><a href="#kpi">KPI</a>
+  </div></nav>
+
+  <!-- ============================================================ RINGKASAN -->
+  <section data-tab="ringkasan" class="stack">
+    <div class="panel">
+      <div class="eyebrow">Jawaban</div>
+      <p class="answer" style="margin-top:6px">TMMIN sebaiknya mengubah <strong>cara pabrik belajar</strong>, bukan menambah peralatan. Closed-Loop Kaizen menutup jalur balik yang hilang (ke proses penyebab, ke standar bersama, dan ke varian berikutnya) dan melindungi 30% waktu untuk memperbaiki, agar pabrik keluar dari jebakan firefighting.</p>
+    </div>
+    <div class="tiles" id="sumTiles"></div>
+    <div class="grid2">
+      <div class="panel">
+        <div class="card-h"><h2>Biaya: dua model, satu arah</h2><p>Indeks biaya konversi, harga konstan 2025 (skala Ex.3: 2025 = 106).</p></div>
+        <div class="legend" id="legSum"></div>
+        <div class="chartbox sm"><canvas id="cSum"></canvas></div>
+      </div>
+      <div class="panel">
+        <div class="card-h"><h2>Empat keputusan kuartal ini</h2></div>
+        <ol class="ask">
+          <li>Setujui Rp8 M untuk pilot sealer → inspeksi, mulai Q4 2026.</li>
+          <li>Tunjuk satu pemilik standar data pabrik.</li>
+          <li>Lindungi 30% waktu perbaikan dan kunci setiap jam yang dibebaskan loop.</li>
+          <li>Skalakan hanya lewat gate akhir 2027, dan anggarkan pemeliharaan setelah 2030.</li>
+        </ol>
+        <div class="eyebrow" style="margin-top:16px">Batas yang kami nyatakan terbuka</div>
+        <p class="note" style="margin-top:4px" id="sumLimits"></p>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="card-h"><h2>Dokumen dan kode</h2><p>Semua angka di dashboard ini dibaca dari file sumber yang sama.</p></div>
+      <div class="links">
+        <a href="https://github.com/Daniel766hi/AI-agent/pull/1">Pull request</a>
+        <a href="https://github.com/Daniel766hi/AI-agent/tree/claude/case-solution-design-stage-2-8j3v10/cases/bcc-tmmin">Folder proyek</a>
+        <a href="https://github.com/Daniel766hi/AI-agent/blob/claude/case-solution-design-stage-2-8j3v10/cases/bcc-tmmin/outputs/deck_closed_loop_kaizen.pptx">Deck 26 slide</a>
+        <a href="https://github.com/Daniel766hi/AI-agent/blob/claude/case-solution-design-stage-2-8j3v10/cases/bcc-tmmin/outputs/proposal_draft.md">Isi proposal</a>
+        <a href="https://github.com/Daniel766hi/AI-agent/tree/claude/case-solution-design-stage-2-8j3v10/cases/bcc-tmmin/work">Stage 2–8</a>
+        <a href="https://github.com/Daniel766hi/AI-agent/blob/claude/case-solution-design-stage-2-8j3v10/cases/bcc-tmmin/model/sd_model.py">Model system dynamics</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ DIAGNOSIS -->
+  <section data-tab="diagnosis" class="stack" hidden>
+    <div class="tiles" id="diagTiles"></div>
+    <div class="grid2">
+      <div class="panel">
+        <div class="card-h"><h2>Selisih biaya melebar setiap tahun</h2><p>Exhibit 3, indeks biaya konversi per unit Karawang (TMMIN 2023 = 100).</p></div>
+        <div class="legend"><span><i class="sw" style="border-color:var(--series-2)"></i>TMMIN</span><span><i class="sw" style="border-color:var(--series-1)"></i>Pemain baru</span></div>
+        <div class="chartbox sm"><canvas id="cGap"></canvas></div>
+      </div>
+      <div class="panel">
+        <div class="card-h"><h2>Kembali ke 2023 hanya menutup 11–19%</h2><p>Jembatan kenaikan indeks 100 → 106 (porsi biaya adalah asumsi tim). Bagian yang bisa dikendalikan kecil dibanding selisih 17 poin.</p></div>
+        <div class="chartbox sm"><canvas id="cBridge"></canvas></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="card-h"><h2>Ketiga belas indikator memburuk</h2><p>Exhibit 4 dan 6A, 2023 → 2025.</p></div>
+      <div class="grid2"><div class="tablewrap" id="tEx4"></div><div class="tablewrap" id="tEx6a"></div></div>
+    </div>
+    <div class="layout">
+      <aside class="panel" aria-label="Bobot heat map">
+        <div class="eyebrow">Bobot heat map</div>
+        <div class="ctl"><label for="hwC">Biaya <span class="val" id="hwCV"></span></label><input type="range" id="hwC" min="1" max="3" step="1"></div>
+        <div class="ctl"><label for="hwQ">Kualitas <span class="val" id="hwQV"></span></label><input type="range" id="hwQ" min="1" max="3" step="1"></div>
+        <div class="ctl"><label for="hwF">Fleksibilitas <span class="val" id="hwFV"></span></label><input type="range" id="hwF" min="1" max="3" step="1"></div>
+        <small class="note">Skor = (bobot × dampak) × celah maturitas (4 − level). Kolom kanan: berapa kali proses masuk tiga besar dari 27 kombinasi bobot.</small>
+      </aside>
+      <div class="panel">
+        <div class="card-h"><h2>Celah terbesar ada di antara proses</h2><p>Proses × dampak × celah maturitas (Ex.5). Inspeksi dan integrasi data selalu masuk tiga besar.</p></div>
+        <div class="tablewrap" id="tHeat"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="card-h"><h2>Akar masalah</h2></div>
+      <p class="root">Pabrik memecahkan masalah yang sama berulang kali karena sinyal masalah dan pelajaran perbaikan tidak punya jalur kembali, baik ke proses penyebab, ke standar bersama, maupun ke varian berikutnya. Akibatnya laju belajar pabrik kalah dari pesaing.</p>
+      <div class="cards3" style="margin-top:14px">
+        <div class="cardx"><h3>Ke proses penyebab</h3><p>Inspeksi Level 1 tidak mengirim hasil ke hulu; sealer tanpa umpan balik otomatis.</p><p class="bad-t">Scrap +8%, cacat lolos hanya +3%: tertangkap, tetapi terlambat</p></div>
+        <div class="cardx"><h3>Ke standar bersama</h3><p>48% proses kritis bergantung pada 1–2 senior; 71% berbagi lewat coaching informal.</p><p class="bad-t">65% waktu engineer memadamkan masalah yang sama; ide terimplementasi −38%</p></div>
+        <div class="cardx"><h3>Ke varian berikutnya</h3><p>Data Level 1; peralatan point-to-point tanpa standar antarmuka.</p><p class="bad-t">Setiap varian baru sekitar 9 bulan pengerjaan ulang</p></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="card-h"><h2>Peluang tersembunyi di data</h2><p>Exhibit 6B (survei area pilot, N = 120).</p></div>
+      <div class="tablewrap" id="tEx6b"></div>
+    </div>
+  </section>
+
+  <!-- ============================================================ SOLUSI -->
+  <section data-tab="solusi" class="stack" hidden>
+    <div class="panel">
+      <div class="card-h"><h2>Closed-Loop Kaizen v2</h2><p>Tiga loop dengan manusia di pusat, ditambah waktu perbaikan yang dilindungi dan target laju belajar.</p></div>
+      <div class="cards3">
+        <div class="cardx"><h3>Loop kualitas · jidoka</h3><p>Abnormalitas kembali ke proses penyebab dalam hitungan menit, dengan aturan stop, koreksi, atau eskalasi.</p></div>
+        <div class="cardx"><h3>Loop data &amp; peralatan · standardized work</h3><p>Satu standar antarmuka dan data milik TMMIN; varian baru menjadi konfigurasi, bukan pengkabelan ulang.</p></div>
+        <div class="cardx"><h3>Loop manusia &amp; pengetahuan · kaizen, yokoten</h3><p>Alat AI buatan operator, kanal ide satu ketukan, know-how senior ditangkap dan ditautkan ke standard work.</p></div>
+      </div>
+      <p class="note" style="margin-top:12px">Pemantik: 30% waktu engineer dan team leader dilindungi (naik bertahap 6 bulan), dan setiap jam yang dibebaskan loop dikunci untuk perbaikan. Ukuran: poin indeks biaya turun per tahun.</p>
+    </div>
+    <div class="layout">
+      <aside class="panel" aria-label="Bobot kriteria" id="scoreCtl"></aside>
+      <div class="panel">
+        <div class="card-h"><h2>Skoring 13 opsi</h2><p>Skor 1–5 adalah penilaian tim. Geser bobot untuk melihat apakah peringkat bertahan. Kolom terakhir: peringkat #1 dari 20.000 bobot acak (Python).</p></div>
+        <div class="tablewrap" id="tScore"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="card-h"><h2>Area pilot: sealer → inspeksi</h2><p>Final assembly menang bila hanya dampak yang dihitung, dan menjadi gelombang rollout pertama (2028).</p></div>
+      <div class="tablewrap" id="tPilot"></div>
+    </div>
+  </section>
+
+  <!-- ============================================================ BUKTI -->
+  <section data-tab="bukti" class="stack" hidden>
+    <div class="grid2">
+      <div class="panel">
+        <div class="card-h"><h2>Kamera saja menaikkan scrap; loop memangkasnya</h2><p>Simulasi Monte Carlo drift sealer: 175.000 unit, 300 simulasi per skenario. Perubahan scrap area pilot vs hari ini.</p></div>
+        <div class="chartbox"><canvas id="cSim"></canvas></div>
+      </div>
+      <div class="panel">
+        <div class="card-h"><h2>Kepercayaan operator bernilai</h2><p>Penurunan scrap area pilot menurut porsi alert yang diabaikan operator (hari ini 31%).</p></div>
+        <div class="chartbox"><canvas id="cDismiss"></canvas></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="card-h"><h2>Uji sensitivitas parameter proses</h2><p>Penurunan scrap area pilot (loop berpusat manusia) pada nilai rendah, dasar, dan tinggi tiap parameter. Parameter proses adalah ilustratif; temuannya mekanisme.</p></div>
+      <div class="tablewrap" id="tSens"></div>
+    </div>
+  </section>
+
+  <!-- ============================================================ SIMULATOR -->
+  <section data-tab="simulator" hidden>
+    <div class="layout">
+      <aside class="panel" aria-label="Panel kendali system dynamics">
+        <div class="ctl">
+          <span class="lab">Kebijakan</span>
+          <div class="seg" id="policy" role="group" aria-label="Kebijakan">
+            <button type="button" data-v="do_nothing">Tanpa tindakan</button><button type="button" data-v="tech_only">Beli teknologi</button>
+            <button type="button" data-v="people_only">SDM saja</button><button type="button" data-v="clk_v1">CLK v1</button><button type="button" data-v="clk_v2">CLK v2</button>
+          </div>
+          <small id="policyNote"></small>
+        </div>
+        <div class="ctl"><label for="capex">Investasi program <span class="val" id="capexV"></span></label><input type="range" id="capex" min="40" max="120" step="5"><small>Rentang casebook Rp40–120 M. Program SDM saja memakai Rp12 M tetap.</small></div>
+        <div class="ctl"><label for="adopt">Adopsi yang terealisasi <span class="val" id="adoptV"></span></label><input type="range" id="adopt" min="0.2" max="1" step="0.05"><small>Porsi efek desain tiap tuas yang tercapai. Monte Carlo memakai 60–100%; di bawah 60% = loop gagal.</small></div>
+        <div class="ctl"><label for="trhc">Target kepatuhan alert <span class="val" id="trhcV"></span></label><input type="range" id="trhc" min="0.7" max="0.95" step="0.01"><small>Hari ini 69% (31% alert diabaikan, Ex.6B).</small></div>
+        <div class="ctl"><label for="protect">Waktu perbaikan dilindungi <span class="val" id="protectV"></span></label><input type="range" id="protect" min="0" max="0.4" step="0.05"><small>Berlaku untuk SDM saja dan CLK v2. Rencana: 30% + ratchet.</small></div>
+        <div class="ctl"><label for="cplx">Kenaikan kompleksitas varian setelah 2025 <span class="val" id="cplxV"></span></label><input type="range" id="cplx" min="0" max="0.0625" step="0.003125"><small>2023–25 naik 6,25%/thn (Ex.4: 8 → 9 bulan). Juga mengubah jalur tanpa tindakan.</small></div>
+        <div class="ctl"><span class="lab">Mulai program</span><div class="seg" id="delay" role="group" aria-label="Mulai program"><button type="button" data-v="0">Q4 2026</button><button type="button" data-v="1">Q4 2027</button><button type="button" data-v="2">Q4 2028</button></div></div>
+        <div class="ctl"><span class="lab">Pola belanja</span><div class="seg" id="phasing" role="group" aria-label="Pola belanja"><button type="button" data-v="light">Pilot-light 10/15/40/25/10</button><button type="button" data-v="front">Di awal 30/35/25/10/0</button></div></div>
+        <label class="toggle"><input type="checkbox" id="gate"> Gate go/no-go akhir 2027</label>
+        <label class="toggle"><input type="checkbox" id="stop2031"> Hentikan program 2031 (uji ketahanan)</label>
+        <button type="button" class="reset" id="reset">Kembali ke rencana dasar</button>
+      </aside>
+      <div class="stack">
+        <div class="tiles" id="tiles"></div>
+        <div class="panel">
+          <div class="card-h"><h2>Indeks biaya konversi, harga konstan 2025</h2><div class="legend" id="legCost"></div></div>
+          <div class="chartbox"><canvas id="cCost" aria-label="Grafik indeks biaya konversi 2023 sampai 2035"></canvas></div>
+          <details><summary>Lihat tabel</summary><div class="tablewrap"><table id="tCost"></table></div></details>
+        </div>
+        <div class="grid3">
+          <div class="panel"><div class="card-h"><h3>Indeks scrap (2023 = 100)</h3></div><div class="chartbox sm"><canvas id="cScrap"></canvas></div></div>
+          <div class="panel"><div class="card-h"><h3>Waktu engineer untuk perbaikan</h3></div><div class="chartbox sm"><canvas id="cTime"></canvas></div></div>
+          <div class="panel"><div class="card-h"><h3>Engineer Software &amp; AI di L3+</h3></div><div class="chartbox sm"><canvas id="cSkill"></canvas></div></div>
+        </div>
+        <div class="grid2">
+          <div class="panel"><div class="card-h"><h2>Arus kas program</h2><p>Penghematan vs tanpa tindakan, dikurangi investasi dan biaya berjalan (Rp miliar). Setelah 2030 termasuk penggantian teknologi.</p></div><div class="chartbox sm"><canvas id="cCash"></canvas></div></div>
+          <div class="panel"><div class="card-h"><h2>Gate akhir 2027</h2><p>Skala hanya bila semua kriteria terpenuhi; bila tidak, belanja berikutnya ditahan.</p></div><div class="gate" id="gateBox"></div></div>
+        </div>
+        <div class="panel"><div class="card-h"><h2>Semua kebijakan pada asumsi ini</h2><p>Lima kebijakan dijalankan dengan asumsi panel yang sama.</p></div><div class="tablewrap"><table id="tPol"></table></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ FINANSIAL -->
+  <section data-tab="finansial" hidden>
+    <div class="layout">
+      <aside class="panel" aria-label="Asumsi model finansial">
+        <div class="ctl"><span class="lab">Skenario</span><div class="seg" id="fScen" role="group" aria-label="Skenario"><button type="button" data-v="konservatif">Konservatif</button><button type="button" data-v="dasar">Dasar</button><button type="button" data-v="optimis">Optimis</button></div><small>Mengisi semua tuas dengan nilai skenario di model spreadsheet.</small></div>
+        <div class="ctl"><label for="fScrap">Penurunan biaya scrap <span class="val" id="fScrapV"></span></label><input type="range" id="fScrap" min="0" max="0.6" step="0.05"><small>Simulasi: −85% di area loop × 40% cakupan ≈ −34%.</small></div>
+        <div class="ctl"><label for="fMaint">Penurunan biaya perawatan <span class="val" id="fMaintV"></span></label><input type="range" id="fMaint" min="0" max="0.25" step="0.01"><small>McKinsey: −18–25%.</small></div>
+        <div class="ctl"><label for="fNva">Waktu NVA operator dihilangkan <span class="val" id="fNvaV"></span></label><input type="range" id="fNva" min="0" max="0.6" step="0.05"><small>Persen dari 22% jam kerja (Ex.4).</small></div>
+        <div class="ctl"><label for="fEnergy">Penurunan biaya energi <span class="val" id="fEnergyV"></span></label><input type="range" id="fEnergy" min="0" max="0.14" step="0.01"><small>Nissan AS: +13,8% kinerja energi dalam 3 tahun.</small></div>
+        <div class="ctl"><label for="fVar">Penurunan biaya modifikasi varian <span class="val" id="fVarV"></span></label><input type="range" id="fVar" min="0" max="0.7" step="0.05"><small>Virtual commissioning −40% s.d. −70%.</small></div>
+        <div class="ctl"><label for="fCapex">Investasi <span class="val" id="fCapexV"></span></label><input type="range" id="fCapex" min="40" max="120" step="5"></div>
+        <div class="ctl"><label for="fRun">Biaya berjalan (% investasi kumulatif) <span class="val" id="fRunV"></span></label><input type="range" id="fRun" min="0.05" max="0.15" step="0.01"></div>
+        <div class="ctl"><label for="fTrain">Pelatihan &amp; perubahan per tahun <span class="val" id="fTrainV"></span></label><input type="range" id="fTrain" min="1" max="5" step="0.5"></div>
+        <div class="ctl"><label for="fLabor">Porsi tenaga kerja dalam biaya konversi <span class="val" id="fLaborV"></span></label><input type="range" id="fLabor" min="0.35" max="0.45" step="0.01"><small>Asumsi tim; casebook hanya menyebut komponennya.</small></div>
+        <div class="ctl"><label for="fCash">Waktu operator yang menjadi kas <span class="val" id="fCashV"></span></label><input type="range" id="fCash" min="0.3" max="0.7" step="0.05"><small>Sisanya dialihkan ke kaizen (tanpa PHK).</small></div>
+        <div class="ctl"><span class="lab">Pola belanja</span><div class="seg" id="fPhase" role="group" aria-label="Pola belanja finansial"><button type="button" data-v="light">Pilot-light</button><button type="button" data-v="front">Di awal</button></div></div>
+        <div class="ctl"><span class="lab">Penghematan</span><div class="seg" id="fDelay" role="group" aria-label="Keterlambatan penghematan"><button type="button" data-v="0">Sesuai rencana</button><button type="button" data-v="1">Terlambat 1 tahun</button></div></div>
+      </aside>
+      <div class="stack">
+        <div class="tiles" id="finTiles"></div>
+        <div class="panel">
+          <div class="card-h"><h2>Penghematan bruto per tuas</h2><div class="legend" id="legFin"></div></div>
+          <div class="chartbox"><canvas id="cFin"></canvas></div>
+          <details><summary>Lihat arus kas per tahun</summary><div class="tablewrap"><table id="tFin"></table></div></details>
+        </div>
+        <div class="grid2">
+          <div class="panel"><div class="card-h"><h2>Tiga skenario</h2><p>Nilai tuas dan investasi skenario model spreadsheet.</p></div><div class="tablewrap" id="tScen"></div></div>
+          <div class="panel"><div class="card-h"><h2>Break-even</h2><p>Penghematan tahun pertama yang dibutuhkan agar NPV = 0 (faktor PV anuitas tumbuh 4%, diskonto 10%, 5 tahun).</p></div><div class="tablewrap" id="tBreak"></div></div>
+        </div>
+        <div class="panel"><div class="card-h"><h2>Tornado model finansial</h2><p>NPV dasar saat satu input digeser ke nilai rendah dan tinggi (dari <span class="num">model/run_tests.py</span>).</p></div><div class="chartbox"><canvas id="cTornXl"></canvas></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ STRES -->
+  <section data-tab="stres" class="stack" hidden>
+    <div class="panel">
+      <div class="card-h"><h2>Model system dynamics: 1.500 simulasi per strategi</h2><p>18 input segitiga, termasuk uji kegagalan loop. Garis = P5 sampai P95 NPV 2026–2030, titik = median, kanan = peluang NPV &gt; 0.</p></div>
+      <div class="range" id="mcBox"></div>
+    </div>
+    <div class="panel">
+      <div class="card-h"><h2>Model finansial: 10.000 simulasi per strategi</h2><p>13 input segitiga; gate berhenti bila adopsi pilot &lt; 80% (terjadi di <span class="num" id="xlGate"></span> simulasi).</p></div>
+      <div class="range" id="xlBox"></div>
+    </div>
+    <div class="grid2">
+      <div class="panel"><div class="card-h"><h2>Tornado system dynamics</h2><p>NPV CLK v2 saat satu input digeser ke nilai rendah dan tinggi.</p></div><div class="chartbox"><canvas id="cTornSd"></canvas></div></div>
+      <div class="panel">
+        <div class="card-h"><h2>Apa artinya</h2></div>
+        <ul class="note" style="display:grid;gap:8px;padding-left:18px;margin:0">
+          <li><strong>Kecepatan menentukan</strong> di kedua model: terlambat satu tahun menurunkan peluang NPV positif ke 21–32%.</li>
+          <li><strong>Pilot-light adalah asuransi.</strong> Belanja di awal lebih untung bila loop berhasil; bila gagal, pilot-light menjaga peluang NPV positif di 90% vs 60%.</li>
+          <li><strong>Perlindungan waktu</strong> memotong NPV jangka pendek sedikit, tetapi tanpa itu gate salah menghentikan program yang berhasil di 46% simulasi (vs 22%).</li>
+          <li>Kedua model berbeda soal belanja di awal karena hanya system dynamics yang mengaitkan cakupan loop dengan belanja.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ KEBERLANJUTAN -->
+  <section data-tab="keberlanjutan" class="stack" hidden>
+    <div class="tiles" id="susTiles"></div>
+    <div class="grid2">
+      <div class="panel"><div class="card-h"><h2>CO₂ dihindari (ton per tahun)</h2><p>Loop energi vs tanpa tindakan. Grid Jamali 0,80 tCO₂/MWh; tarif PLN I-3 Rp1.114,74/kWh; 70% biaya energi listrik (asumsi).</p></div><div class="chartbox sm"><canvas id="cCo2"></canvas></div></div>
+      <div class="panel"><div class="card-h"><h2>Ketahanan hasil sampai 2035</h2><div class="legend"><span><i class="sw" style="border-color:var(--series-1)"></i>Cara kerja dipertahankan</span><span><i class="sw dash" style="border-color:var(--series-2)"></i>Program dihentikan 2031</span><span><i class="sw" style="border-color:var(--baseline)"></i>Tanpa tindakan</span></div></div><div class="chartbox sm"><canvas id="cDur"></canvas></div></div>
+    </div>
+    <div class="panel"><div class="card-h"><h2>Dampak sosial: orang dan pengetahuan</h2><p>Model system dynamics, skenario CLK v2. Ketergantungan pada senior dan waktu hingga mandiri diturunkan dari know-how (dikalibrasi ke Ex.6A).</p></div><div class="tablewrap" id="tSocial"></div></div>
+  </section>
+
+  <!-- ============================================================ ROADMAP -->
+  <section data-tab="roadmap" class="stack" hidden>
+    <div class="panel"><div class="card-h"><h2>Fase, pemilik, dan kriteria lanjut</h2><p>Hanya 25% investasi dikeluarkan sebelum gate akhir 2027.</p></div><div class="tablewrap" id="tPhase"></div></div>
+    <div class="panel"><div class="card-h"><h2>Gate go/no-go akhir 2027</h2><p>Program diskalakan hanya bila semua kriteria terpenuhi.</p></div><div class="tablewrap" id="tGate"></div></div>
+    <div class="panel"><div class="card-h"><h2>Seratus hari pertama</h2><p>Hanya aset yang sudah dimiliki TMMIN.</p></div><div class="tablewrap" id="tDays"></div></div>
+    <div class="grid2">
+      <div class="panel"><div class="card-h"><h2>Rencana kapabilitas</h2></div><div class="tablewrap" id="tCap"></div></div>
+      <div class="panel"><div class="card-h"><h2>Bangun sendiri vs bermitra</h2></div><div class="tablewrap" id="tBuild"></div></div>
+    </div>
+    <div class="panel"><div class="card-h"><h2>Risk register</h2><p>Skor = peluang × dampak (1–5 masing-masing).</p></div><div class="tablewrap" id="tRisk"></div></div>
+  </section>
+
+  <!-- ============================================================ KPI -->
+  <section data-tab="kpi" class="stack" hidden>
+    <div class="panel"><div class="card-h"><h2>KPI hasil</h2><p>Kolom gate 2027 sama dengan kriteria gate di roadmap.</p></div><div class="tablewrap" id="tKpiO"></div></div>
+    <div class="panel"><div class="card-h"><h2>KPI pendorong: orang, pengetahuan, adopsi</h2></div><div class="tablewrap" id="tKpiD"></div></div>
+    <div class="grid2">
+      <div class="panel"><div class="card-h"><h2>KPI keberlanjutan</h2></div><div class="tablewrap" id="tKpiS"></div></div>
+      <div class="panel"><div class="card-h"><h2>Koreksi terbuka terhadap draf</h2><p>Target yang diturunkan agar konsisten dengan model.</p></div><div class="tablewrap" id="tKpiF"></div></div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <p><strong>Cara membaca.</strong> NPV system dynamics dihitung terhadap jalur tanpa tindakan, yang terus memburuk seperti 2023–2025. Terhadap kinerja yang dibekukan di 2025, NPV jauh lebih rendah; keduanya ditampilkan.</p>
+    <p><strong>Batas model.</strong> Model system dynamics dikalibrasi pada dua titik data dummy (galat &lt; 3%); lantai masalah 85% dan batas produktivitas 2× menahan hasil di bawah benchmark eksternal. Volume tetap 175.000 unit; porsi komponen biaya adalah asumsi tim. Model di browser diperiksa sama dengan model Python sebelum halaman dibangun.</p>
+    <p>Sumber: casebook M3C 2026 (Exhibit 1–9), <span class="num">model/sd_model.py</span>, <span class="num">model/build_model.py</span>, <span class="num">model/run_tests.py</span>, <span class="num">work/</span>.</p>
+  </footer>
+</div>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+/*__SD_MODEL__*/
+</script>
+<script>
+/*__FIN_MODEL__*/
+</script>
+<script>
+const DATA = /*__DATA__*/;
+(function () {
+  const M = window.SDModel, F = window.FinModel;
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const idn = (x, d = 1) => {
+    if (x === null || x === undefined || Number.isNaN(x)) return "–";
+    const s = Math.abs(x).toFixed(d).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    return (x < 0 ? "−" : "") + s;
+  };
+  const pct = (x, d = 0) => idn(x * 100, d) + "%";
+  const rp = (x, d = 1) => (x < 0 ? "−Rp" + idn(-x, d) : "Rp" + idn(x, d)) + " M";
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const store = { get(k, d) { try { const v = JSON.parse(localStorage.getItem(k) || "null"); return v ?? d; } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
+  const tile = (k, v, d, pill = "") => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div>${pill}<div class="d">${d}</div></div>`;
+  function mdTable(rows, numCols = []) {
+    const [head, ...body] = rows;
+    return `<table><tr>${head.map((h, i) => `<th class="${numCols.includes(i) ? "n" : ""}">${esc(h)}</th>`).join("")}</tr>` +
+      body.map((r) => `<tr>${r.map((c, i) => `<td class="${numCols.includes(i) ? "n" : ""}">${esc(c)}</td>`).join("")}</tr>`).join("") + "</table>";
+  }
+
+  // ---------------------------------------------------------------- charts
+  const charts = {};
+  function baseOpts(yFmt, yMin, yMax, extra = {}) {
+    const ink = css("--muted"), grid = css("--grid");
+    return {
+      responsive: true, maintainAspectRatio: false, animation: { duration: 250 }, layout: { padding: { left: 14, right: 6 } },
+      interaction: { mode: "index", intersect: false },
+      plugins: { legend: { display: false },
+        tooltip: { backgroundColor: css("--ink"), titleColor: css("--bg"), bodyColor: css("--bg"), padding: 9,
+          titleFont: { family: "IBM Plex Mono" }, bodyFont: { family: "IBM Plex Sans" },
+          callbacks: { label: (c) => ` ${c.dataset.label}: ${yFmt(c.parsed.y)}` } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: ink, font: { family: "IBM Plex Mono", size: 11 }, maxRotation: 0, autoSkip: true, autoSkipPadding: 8 }, border: { color: grid } },
+        y: { min: yMin, max: yMax, grid: { color: grid }, ticks: { color: ink, font: { family: "IBM Plex Mono", size: 11 }, callback: (v) => yFmt(v) }, border: { display: false } },
+      }, ...extra,
+    };
+  }
+  const line = (label, data, color, dash = false, width = 2.5) => ({ label, data, borderColor: color, backgroundColor: color, borderWidth: width,
+    borderDash: dash ? [6, 4] : [], pointRadius: 0, pointHoverRadius: 5, pointHitRadius: 12, tension: 0.25 });
+  function draw(id, type, data, opts) {
+    if (charts[id]) { charts[id].data = data; charts[id].options = opts; charts[id].update(); return; }
+    charts[id] = new Chart($(id), { type, data, options: opts });
+  }
+  function hbar(id, labels, lo, hi, fmt, colorFn) {
+    const opts = baseOpts(fmt, undefined, undefined, { indexAxis: "y" });
+    opts.scales = { x: { grid: { color: css("--grid") }, ticks: { color: css("--muted"), font: { family: "IBM Plex Mono", size: 11 }, callback: (v) => fmt(v) }, border: { display: false } },
+      y: { grid: { display: false }, ticks: { color: css("--ink"), font: { family: "IBM Plex Sans", size: 12 } }, border: { color: css("--grid") } } };
+    opts.interaction = { mode: "nearest", intersect: true, axis: "y" };
+    opts.plugins.tooltip.callbacks = { label: (c) => ` ${fmt(c.raw[0])} sampai ${fmt(c.raw[1])}` };
+    draw(id, "bar", { labels, datasets: [{ label: "Rentang", data: labels.map((_, i) => [lo[i], hi[i]]),
+      backgroundColor: labels.map((_, i) => colorFn(i)), borderRadius: 3, borderSkipped: false, barPercentage: 0.7 }] }, opts);
+  }
+  const YRS = M.YEARS.map(String);
+  const ann = (out, key, f = 1) => M.YEARS.map((y) => +(M.annual(out, key, y) * f).toFixed(3));
+
+  // ---------------------------------------------------------------- shared SD runs at casebook defaults
+  const P0 = DATA.sd.params;
+  const DEF0 = (() => {
+    const base = M.simulate(P0, M.POLICIES.do_nothing), frozen = M.simulate(P0, M.POLICIES.frozen_2025);
+    const plan = M.simulate(P0, M.POLICIES.clk_v2);
+    const relapse = M.simulate(P0, { ...M.POLICIES.clk_v2, end: 2031.0 });
+    return { base, frozen, plan, relapse, e: M.economics(P0, M.POLICIES.clk_v2, base, plan, frozen) };
+  })();
+  const XL0 = F.run({ ...F.SCEN.dasar });
+  const MCP = DATA.sd.mc["CLK v2, pilot-light + gate"], MCL = DATA.sd.mc["CLK v2, 1 year late + gate"];
+  const XLD = DATA.xl.strategies.find((s) => s.id === "D"), XLF = DATA.xl.strategies.find((s) => s.id === "F");
+
+  // ---------------------------------------------------------------- RINGKASAN
+  function renderSummary() {
+    const sd30 = M.annual(DEF0.plan, "cost_idx_real", 2030), dn30 = M.annual(DEF0.base, "cost_idx_real", 2030);
+    const co2 = DEF0.e.tco2.find((r) => r.year === 2030).tco2;
+    $("sumTiles").innerHTML = [
+      tile("Indeks biaya 2030, harga konstan 2025", `${idn(XL0.idx, 0)}–${idn(sd30, 0)}`, `Spreadsheet ${idn(XL0.idx)} · system dynamics ${idn(sd30)} · tanpa tindakan ${idn(dn30)}`),
+      tile("NPV 2026–2030 dari Rp80 M", `Rp${idn(XL0.npv, 0)}–${idn(DEF0.e.npv, 0)} M`, `Spreadsheet ${rp(XL0.npv)} · SD vs tanpa tindakan ${rp(DEF0.e.npv)}`,
+        `<span class="pill good">✓ Peluang positif ${pct(XLD.prob_pos)}–${pct(MCP.p_pos)}</span>`),
+      tile("Bila terlambat 1 tahun", `${pct(MCL.p_pos)}–${pct(XLF.prob_pos)}`, "Peluang NPV positif turun; karena itu 100 hari pertama hanya memakai aset yang ada", `<span class="pill warn">! Risiko terbesar</span>`),
+      tile("Orang dan bumi, 2030", `${idn(co2, 0)} t CO₂`, `Engineer SW & AI L3+ 2 → ${idn(M.at(DEF0.plan, "S", 2031))} · know-how 33% → ${pct(M.at(DEF0.plan, "K", 2031))}`),
+    ].join("");
+    $("sumLimits").innerHTML = `Terhadap kinerja yang dibekukan di 2025 tanpa usaha, NPV 2026–30 ${rp(DEF0.e.npvFrozen)} dan baru positif dalam 10 tahun. Terhadap pesaing yang terus turun, program memperlambat pelebaran selisih tetapi <strong>tidak menutupnya</strong> pada 2030.`;
+    const C1 = css("--series-1"), C2 = css("--series-2"), CB = css("--baseline");
+    $("legSum").innerHTML = `<span><i class="sw" style="border-color:${C1}"></i>CLK v2 (system dynamics)</span><span><i class="sw dash" style="border-color:${C2}"></i>Spreadsheet 2030: ${idn(XL0.idx)}</span><span><i class="sw" style="border-color:${CB}"></i>Tanpa tindakan</span>`;
+    const xlPoint = M.YEARS.map((y) => (y === 2030 ? +XL0.idx.toFixed(2) : y === 2025 ? 106 : null));
+    const xlLine = { ...line("Spreadsheet", xlPoint, C2, true, 2), spanGaps: true, pointRadius: xlPoint.map((v) => (v === null ? 0 : 4)) };
+    draw("cSum", "line", { labels: YRS, datasets: [line("CLK v2", ann(DEF0.plan, "cost_idx_real"), C1), xlLine, line("Tanpa tindakan", ann(DEF0.base, "cost_idx_real"), CB, false, 2)] },
+      baseOpts((v) => idn(v, 0), 90, 125));
+  }
+
+  // ---------------------------------------------------------------- DIAGNOSIS
+  const hw = store.get("clk-heat", { c: 1, q: 1, f: 1 });
+  function renderDiag() {
+    const D = DATA.diag;
+    $("diagTiles").innerHTML = [
+      tile("Selisih biaya ke pemain baru", "6 → 17", "poin indeks, 2023 → 2025 (Ex.3)"),
+      tile("Pelebaran per tahun", "+" + idn(D.widen) + " poin", `${pct(D.shareTmmin)} dari TMMIN yang naik, ${pct(1 - D.shareTmmin)} dari pesaing yang turun`),
+      tile("Ide terimplementasi per engineer", `${idn(D.impl[0], 2)} → ${idn(D.impl[1], 2)}`, `${pct(D.impl[1] / D.impl[0] - 1)} (Ex.6A: ide × persen diimplementasikan)`, `<span class="pill bad">✕ Mesin perbaikan melemah</span>`),
+      tile("Bagian selisih yang bisa dikendalikan", `${idn(D.bridge.driftLo)}–${idn(D.bridge.driftHi)}`, "poin dari 17 (scrap, NVA, downtime); sisanya struktural"),
+    ].join("");
+    const C1 = css("--series-1"), C2 = css("--series-2");
+    draw("cGap", "line", { labels: ["2023", "2024", "2025"], datasets: [line("TMMIN", [100, 103, 106], C2), line("Pemain baru", [94, 91, 89], C1)].map((d) => ({ ...d, pointRadius: 4 })) },
+      baseOpts((v) => idn(v, 0), 85, 110));
+    const b = D.bridge;
+    const bo = baseOpts((v) => idn(v, 1), 0, 18, { indexAxis: "y" });
+    bo.scales = { x: { min: 0, max: 18, grid: { color: css("--grid") }, ticks: { color: css("--muted"), font: { family: "IBM Plex Mono", size: 11 } }, border: { display: false } },
+      y: { grid: { display: false }, ticks: { color: css("--ink"), font: { family: "IBM Plex Sans", size: 12 } } } };
+    bo.interaction = { mode: "nearest", intersect: true, axis: "y" };
+    bo.plugins.tooltip.callbacks = { label: (c) => ` ${idn(c.parsed.x, 1)} poin` };
+    draw("cBridge", "bar", { labels: ["Eskalasi upah & energi", "Scrap 100 → 108", "NVA 20% → 22%", "Downtime (maks)", "Selisih 2025"],
+      datasets: [{ label: "Poin", data: [b.esc, b.scrap, b.nva, b.maintHi, 17], backgroundColor: [css("--baseline"), C1, C1, C1, C2], borderRadius: 3, barPercentage: 0.7 }] }, bo);
+    $("tEx4").innerHTML = mdTable(DATA.ex["4"], [1, 2]);
+    $("tEx6a").innerHTML = mdTable(DATA.ex["6A"], [1, 2]);
+    $("tEx6b").innerHTML = mdTable(DATA.ex["6B"], [1]);
+    // heat map
+    for (const [id, k] of [["hwC", "c"], ["hwQ", "q"], ["hwF", "f"]]) { $(id).value = hw[k]; $(id + "V").textContent = "× " + hw[k]; }
+    const rows = Object.entries(D.procs).map(([name, [lvl, c, q, f]]) => ({ name, lvl, c, q, f, s: (hw.c * c + hw.q * q + hw.f * f) * (4 - lvl), top3: D.top3[name] }))
+      .sort((a, b) => b.s - a.s);
+    const maxS = rows[0].s;
+    const cell = (v) => `<td class="n" style="background:color-mix(in srgb, var(--series-2) ${v * 14}%, transparent)">${v}</td>`;
+    $("tHeat").innerHTML = `<table><tr><th>#</th><th>Proses</th><th class="n">Level</th><th class="n">Biaya</th><th class="n">Kualitas</th><th class="n">Fleks.</th><th class="n">Skor</th><th class="n">Tiga besar /27</th></tr>` +
+      rows.map((r, i) => `<tr class="${i < 3 ? "sel" : ""}"><td class="n">${i + 1}</td><td>${esc(r.name)}</td><td class="n">${r.lvl}</td>${cell(r.c)}${cell(r.q)}${cell(r.f)}<td class="n score">${r.s}</td><td class="n">${r.top3}</td></tr>`).join("") + "</table>";
+  }
+  for (const [id, k] of [["hwC", "c"], ["hwQ", "q"], ["hwF", "f"]]) $(id).addEventListener("input", (e) => { hw[k] = +e.target.value; store.set("clk-heat", hw); renderDiag(); });
+
+  // ---------------------------------------------------------------- SOLUSI
+  const SC = DATA.score;
+  const sw = store.get("clk-score", SC.criteria.map((c) => c[2]));
+  $("scoreCtl").innerHTML = `<div class="eyebrow">Bobot kriteria</div>` + SC.criteria.map(([k, lab], i) =>
+    `<div class="ctl"><label for="sw${i}">${esc(lab)} <span class="val" id="sw${i}V"></span></label><input type="range" id="sw${i}" min="0" max="0.4" step="0.05"></div>`).join("") +
+    `<small class="note">Bobot dinormalisasi otomatis. Bobot tim: 20/15/15/15/10/15/10.</small><button type="button" class="reset" id="swReset">Kembali ke bobot tim</button>`;
+  SC.criteria.forEach((_, i) => $("sw" + i).addEventListener("input", (e) => { sw[i] = +e.target.value; store.set("clk-score", sw); renderScore(); }));
+  $("swReset").addEventListener("click", () => { SC.criteria.forEach((c, i) => { sw[i] = c[2]; }); store.set("clk-score", sw); renderScore(); });
+  function renderScore() {
+    const tot = sw.reduce((a, v) => a + v, 0) || 1;
+    sw.forEach((v, i) => { $("sw" + i).value = v; $("sw" + i + "V").textContent = pct(v / tot); });
+    const rows = Object.entries(SC.options).map(([n, s]) => ({ n, s, t: s.reduce((a, v, i) => a + v * sw[i] / tot, 0) })).sort((a, b) => b.t - a.t);
+    $("tScore").innerHTML = `<table><tr><th>#</th><th>Opsi</th>${SC.criteria.map((c) => `<th class="n" title="${esc(c[1])}">${esc(c[1].split(" ")[0])}</th>`).join("")}<th class="n">Total</th><th class="n">#1 dari 20.000</th></tr>` +
+      rows.map((r, i) => `<tr class="${i === 0 ? "sel" : ""}"><td class="n">${i + 1}</td><td>${esc(r.n)}</td>${r.s.map((v) => `<td class="n">${v}</td>`).join("")}<td class="n score">${idn(r.t, 2)}</td><td class="n">${pct(SC.rank1[r.n] || 0, 1)}</td></tr>`).join("") + "</table>";
+    const pw = SC.pcrit.map((c) => c[2]);
+    const prow = Object.entries(SC.pilots).map(([n, s]) => ({ n, s, t: s.reduce((a, v, i) => a + v * pw[i], 0) })).sort((a, b) => b.t - a.t);
+    $("tPilot").innerHTML = `<table><tr><th>Area</th>${SC.pcrit.map((c) => `<th class="n">${esc(c[1])} (${pct(c[2])})</th>`).join("")}<th class="n">Total</th><th class="n">#1 dari 20.000</th></tr>` +
+      prow.map((r, i) => `<tr class="${i === 0 ? "sel" : ""}"><td>${esc(r.n)}</td>${r.s.map((v) => `<td class="n">${v}</td>`).join("")}<td class="n score">${idn(r.t, 2)}</td><td class="n">${pct(SC.pilotRank1[r.n] || 0, 1)}</td></tr>`).join("") + "</table>";
+  }
+
+  // ---------------------------------------------------------------- BUKTI
+  function renderProof() {
+    const X = DATA.xl;
+    const labs = ["Hari ini: visual di akhir", "Kamera lebih baik di akhir", "Loop, 31% alert diabaikan", "Loop berpusat manusia"];
+    const vals = X.sim.map((s) => +(-s.scrap_red * 100).toFixed(1));
+    const o = baseOpts((v) => (v > 0 ? "+" : "") + idn(v, 0) + "%", -100, 20);
+    o.interaction = { mode: "nearest", intersect: true };
+    o.plugins.tooltip.callbacks = { label: (c) => ` Perubahan scrap: ${(c.parsed.y > 0 ? "+" : "") + idn(c.parsed.y, 1)}% · cacat lolos ${idn(-X.sim[c.dataIndex].esc_red * 100, 0)}%` };
+    draw("cSim", "bar", { labels: labs, datasets: [{ label: "Perubahan scrap", data: vals,
+      backgroundColor: vals.map((v, i) => (i === 0 ? css("--baseline") : v > 0 ? css("--series-2") : css("--series-1"))), borderRadius: 4, maxBarThickness: 64 }] }, o);
+    const od = baseOpts((v) => idn(v, 0) + "%", 0, 100);
+    od.scales.x.title = { display: true, text: "Alert yang diabaikan operator", color: css("--muted"), font: { family: "IBM Plex Sans", size: 12 } };
+    draw("cDismiss", "line", { labels: X.dismiss.map((d) => pct(d[0])), datasets: [{ ...line("Penurunan scrap", X.dismiss.map((d) => +(d[1] * 100).toFixed(1)), css("--series-1")), pointRadius: 4 }] }, od);
+    $("tSens").innerHTML = `<table><tr><th>Parameter</th><th class="n">Rendah</th><th class="n">Dasar</th><th class="n">Tinggi</th></tr>` +
+      X.sens.map((s) => `<tr><td>${esc(s.name)}</td>${s.points.map(([v, r]) => `<td class="n">${pct(r, 1)} <span class="muted">@ ${idn(v, v < 1 ? 2 : 0)}</span></td>`).join("")}</tr>`).join("") + "</table>";
+  }
+
+  // ---------------------------------------------------------------- SIMULATOR (system dynamics)
+  const DEF = { policy: "clk_v2", capex: 80, adopt: 1.0, trhc: 0.90, protect: 0.30, cplx: 0.03125, delay: 0, phasing: "light", gate: true, stop2031: false };
+  let st = { ...DEF, ...store.get("clk-sim", {}) };
+  const NOTES = { do_nothing: "Jalur pembanding: pabrik terus memburuk seperti 2023–2025.", tech_only: "Kamera dan integrasi oleh vendor di akhir lini, tanpa loop dan tanpa program SDM.",
+    people_only: "Akademi, kanal ide, sprint know-how, dan waktu dilindungi; tanpa loop data.", clk_v1: "Tiga loop dengan alert berpusat manusia, tanpa perlindungan waktu.",
+    clk_v2: "Rencana: tiga loop + waktu perbaikan dilindungi dan ratchet." };
+  const params = () => ({ ...P0, adopt: st.adopt, tr_hc: st.trhc, cplx_post: st.cplx, capex: st.capex });
+  function policy(key) {
+    const base = { ...M.POLICIES[key] };
+    if (key === "do_nothing" || key === "frozen_2025") return base;
+    base.delay = st.delay;
+    if (st.phasing === "front") base.phasing = M.FRONT;
+    if (base.firewall) base.protect = st.protect;
+    if (key === "tech_only") base.capex = st.capex;
+    if (st.stop2031) base.end = 2031.0;
+    return base;
+  }
+  function runSd(key, p, base, frozen) {
+    const pol = policy(key), out = M.simulate(p, pol, null, st.gate);
+    return { out, pol, e: key === "do_nothing" ? null : M.economics(p, pol, base, out, frozen) };
+  }
+  function bindSeg(id, set) { $(id).addEventListener("click", (ev) => { const b = ev.target.closest("button"); if (b) set(b.dataset.v); }); }
+  bindSeg("policy", (v) => { st.policy = v; renderSim(); }); bindSeg("delay", (v) => { st.delay = +v; renderSim(); }); bindSeg("phasing", (v) => { st.phasing = v; renderSim(); });
+  ["capex", "adopt", "trhc", "protect", "cplx"].forEach((k) => $(k).addEventListener("input", (e) => { st[k] = +e.target.value; renderSim(); }));
+  $("gate").addEventListener("change", (e) => { st.gate = e.target.checked; renderSim(); });
+  $("stop2031").addEventListener("change", (e) => { st.stop2031 = e.target.checked; renderSim(); });
+  $("reset").addEventListener("click", () => { st = { ...DEF }; renderSim(); });
+  const press = (id, v) => $(id).querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === String(v))));
+  function renderSim() {
+    store.set("clk-sim", st);
+    press("policy", st.policy); press("delay", st.delay); press("phasing", st.phasing);
+    for (const k of ["capex", "adopt", "trhc", "protect", "cplx"]) $(k).value = st[k];
+    $("gate").checked = st.gate; $("stop2031").checked = st.stop2031;
+    $("capexV").textContent = "Rp" + st.capex + " M"; $("adoptV").textContent = pct(st.adopt); $("trhcV").textContent = pct(st.trhc);
+    $("protectV").textContent = pct(st.protect); $("cplxV").textContent = idn(st.cplx * 100, 2) + "%/thn"; $("policyNote").textContent = NOTES[st.policy];
+    ["capex", "adopt", "trhc", "protect"].forEach((id) => { $(id).disabled = st.policy === "do_nothing"; });
+    const p = params(), base = M.simulate(p, M.POLICIES.do_nothing), frozen = M.simulate(p, M.POLICIES.frozen_2025);
+    const cur = runSd(st.policy, p, base, frozen), o = cur.out, e = cur.e;
+    const idx30 = M.annual(o, "cost_idx_real", 2030), dn30 = M.annual(base, "cost_idx_real", 2030);
+    const co2 = e ? e.tco2.find((r) => r.year === 2030).tco2 : 0;
+    let gp = "";
+    if (cur.pol.loop && st.gate) gp = o.stopped ? `<span class="pill bad">✕ Gate berhenti</span>` : `<span class="pill good">✓ Gate lolos</span>`;
+    else if (cur.pol.loop) gp = `<span class="pill warn">! Tanpa gate</span>`;
+    $("tiles").innerHTML = [
+      tile("Indeks biaya 2030, harga konstan 2025", idn(idx30), `Hari ini 106 · tanpa tindakan ${idn(dn30)} · selisih ${idn(idx30 - dn30)}`),
+      tile("NPV 2026–2030 vs tanpa tindakan", e ? rp(e.npv) : "–", e ? `Vs kinerja beku 2025: ${rp(e.npvFrozen)} · 2026–35: ${rp(e.npv35)}` : "Pembanding",
+        e ? `<span class="pill ${e.npv >= 0 ? "good" : "bad"}">${e.npv >= 0 ? "✓ Positif" : "✕ Negatif"} · payback ${e.payback || "setelah 2030"}</span>` : ""),
+      tile("Gate dan investasi", e ? "Rp" + idn(e.rows.filter((r) => r.year <= 2030).reduce((a, r) => a + r.inv, 0), 0) + " M" : "–", "Investasi terpakai 2026–2030", gp),
+      tile("CO₂ dihindari 2030", idn(co2, 0) + " t", `Engineer L3+ ${idn(M.at(o, "S", 2031))}/30 · know-how ${pct(M.at(o, "K", 2031))} · scrap ${idn(M.annual(o, "scrap", 2030) * 100, 0)}`),
+    ].join("");
+    const C1 = css("--series-1"), C2 = css("--series-2"), CB = css("--baseline");
+    const showPlan = !(st.policy === "clk_v2" && JSON.stringify({ ...st, policy: 0 }) === JSON.stringify({ ...DEF, policy: 0 }));
+    $("legCost").innerHTML = [`<span><i class="sw" style="border-color:${C1}"></i>Skenario Anda: ${M.POLICIES[st.policy].label}</span>`,
+      showPlan ? `<span><i class="sw dash" style="border-color:${C2}"></i>Rencana dasar (CLK v2)</span>` : "", `<span><i class="sw" style="border-color:${CB}"></i>Tanpa tindakan</span>`].join("");
+    const ds = (key, f) => ({ labels: YRS, datasets: [line("Skenario Anda", ann(o, key, f), C1), ...(showPlan ? [line("Rencana dasar", ann(DEF0.plan, key, f), C2, true, 2)] : []), line("Tanpa tindakan", ann(base, key, f), CB, false, 2)] });
+    draw("cCost", "line", ds("cost_idx_real", 1), baseOpts((v) => idn(v, 0), 90, 125));
+    draw("cScrap", "line", ds("scrap", 100), baseOpts((v) => idn(v, 0), 0, 160));
+    draw("cTime", "line", ds("I", 100), baseOpts((v) => idn(v, 0) + "%", 0, 50));
+    draw("cSkill", "line", ds("S", 1), baseOpts((v) => idn(v, 0), 0, 25));
+    const tr = (cells, tag = "td") => "<tr>" + cells.map((c, i) => `<${tag}${i ? ' class="n"' : ""}>${c}</${tag}>`).join("") + "</tr>";
+    $("tCost").innerHTML = tr(["Tahun", "Skenario Anda", "Rencana dasar", "Tanpa tindakan"], "th") +
+      M.YEARS.map((y) => tr([y, idn(M.annual(o, "cost_idx_real", y)), idn(M.annual(DEF0.plan, "cost_idx_real", y)), idn(M.annual(base, "cost_idx_real", y))])).join("");
+    if (e) {
+      const net = e.rows.map((r) => +r.net.toFixed(2)), oc = baseOpts((v) => idn(v, 0));
+      oc.interaction = { mode: "nearest", intersect: true };
+      oc.plugins.tooltip.callbacks = { label: (c) => { const r = e.rows[c.dataIndex]; return [` Arus kas bersih: ${rp(r.net)}`, ` Penghematan: ${rp(r.sav)}`, ` Investasi: ${rp(r.inv)}`, ` Biaya berjalan: ${rp(r.run)}`]; } };
+      draw("cCash", "bar", { labels: e.rows.map((r) => String(r.year)), datasets: [{ label: "Arus kas bersih", data: net, backgroundColor: net.map((v) => (v >= 0 ? C1 : C2)), borderRadius: 4, borderSkipped: "start", maxBarThickness: 28 }] }, oc);
+    } else draw("cCash", "bar", { labels: [], datasets: [] }, baseOpts((v) => v));
+    const g = o.gate;
+    if (!cur.pol.loop) $("gateBox").innerHTML = `<p class="note">Gate hanya berlaku untuk kebijakan dengan loop (CLK v1 dan v2). ${st.policy === "tech_only" ? "Beli teknologi saja tidak punya titik berhenti: seluruh Rp" + st.capex + " M dibelanjakan." : ""}</p>`;
+    else if (!st.gate) $("gateBox").innerHTML = `<p class="note">Gate dimatikan: seluruh investasi dibelanjakan apa pun hasil pilotnya.</p>`;
+    else if (g) {
+      const rows = [["Penurunan scrap di area pilot", g.pilotCut, 0.60, pct(g.pilotCut), "≥ 60%"], ["Kepatuhan alert operator", g.Tr, 0.80, pct(g.Tr), "≥ 80%"],
+        ["Cakupan loop (lini kendaraan)", g.Lq, 0.15, pct(g.Lq), "≥ 15%"], ["Ide terimplementasi per engineer", g.ideas, 0.75, idn(g.ideas, 2), "≥ 0,75"]];
+      $("gateBox").innerHTML = `<div class="eyebrow">Diukur akhir ${Math.round(g.t) - 1}</div>` +
+        rows.map(([k, v, th, vs, ts]) => `<div class="row"><span class="mark ${v >= th ? "ok" : "no"}">${v >= th ? "✓" : "✕"}</span><span>${k} <span class="muted">(${ts})</span></span><span class="num">${vs}</span></div>`).join("") +
+        `<div style="margin-top:6px">${o.stopped ? '<span class="pill bad">✕ Gate berhenti: 75% belanja ditahan</span>' : '<span class="pill good">✓ Gate lolos: program diskalakan</span>'}</div>`;
+    } else $("gateBox").innerHTML = `<p class="note">Gate jatuh setelah 2035 untuk pilihan mulai ini.</p>`;
+    const keys = ["do_nothing", "tech_only", "people_only", "clk_v1", "clk_v2"];
+    $("tPol").innerHTML = "<tr><th>Kebijakan</th><th class='n'>Biaya 2030</th><th class='n'>NPV</th><th class='n'>Scrap</th><th class='n'>L3+</th></tr>" + keys.map((k) => {
+      const r = k === st.policy ? cur : runSd(k, p, base, frozen);
+      return `<tr class="${k === st.policy ? "sel" : ""}"><td>${M.POLICIES[k].label}</td><td class="n">${idn(M.annual(r.out, "cost_idx_real", 2030))}</td><td class="n">${r.e ? idn(r.e.npv) : "–"}</td><td class="n">${idn(M.annual(r.out, "scrap", 2030) * 100, 0)}</td><td class="n">${idn(M.at(r.out, "S", 2031))}</td></tr>`;
+    }).join("");
+  }
+
+  // ---------------------------------------------------------------- FINANSIAL
+  const FDEF = { ...F.SCEN.dasar, laborShare: 0.40, cashConv: 0.50, phasing: "light", delay: 0 };
+  let fs = { ...FDEF, ...store.get("clk-fin", {}) };
+  const FMAP = [["fScrap", "scrap", (v) => pct(v)], ["fMaint", "maint", (v) => pct(v)], ["fNva", "nvaCut", (v) => pct(v)], ["fEnergy", "energy", (v) => pct(v)],
+    ["fVar", "variant", (v) => pct(v)], ["fCapex", "capex", (v) => "Rp" + v + " M"], ["fRun", "runPct", (v) => pct(v)], ["fTrain", "training", (v) => "Rp" + idn(v) + " M"],
+    ["fLabor", "laborShare", (v) => pct(v)], ["fCash", "cashConv", (v) => pct(v)]];
+  FMAP.forEach(([id, k]) => $(id).addEventListener("input", (e) => { fs[k] = +e.target.value; renderFin(); }));
+  bindSeg("fScen", (v) => { fs = { ...fs, ...F.SCEN[v] }; renderFin(); });
+  bindSeg("fPhase", (v) => { fs.phasing = v; renderFin(); });
+  bindSeg("fDelay", (v) => { fs.delay = +v; renderFin(); });
+  function renderFin() {
+    store.set("clk-fin", fs);
+    FMAP.forEach(([id, k, fmt]) => { $(id).value = fs[k]; $(id + "V").textContent = fmt(fs[k]); });
+    const scen = Object.keys(F.SCEN).find((k) => Object.entries(F.SCEN[k]).every(([kk, v]) => Math.abs(fs[kk] - v) < 1e-9));
+    press("fScen", scen || ""); press("fPhase", fs.phasing); press("fDelay", fs.delay);
+    const r = F.run(fs);
+    $("finTiles").innerHTML = [
+      tile("NPV 2026–2030 (10%)", rp(r.npv), `Dengan nilai sisa peralatan: ${rp(r.npvResidual)}`, `<span class="pill ${r.npv >= 0 ? "good" : "bad"}">${r.npv >= 0 ? "✓ Positif" : "✕ Negatif"}</span>`),
+      tile("Payback dan IRR", r.payback ? String(r.payback) : "Setelah 2030", `IRR ${r.irr === null ? "tidak terdefinisi" : pct(r.irr)} · IRR tampak tinggi karena belanja awal kecil`),
+      tile("Penghematan run-rate", rp(r.runRate), `${pct(r.runRate / r.conv, 1)} dari biaya konversi ${rp(r.conv, 0)}`),
+      tile("Indeks biaya 2030, harga 2025", idn(r.idx), `${pct(r.gapClosed)} selisih ke 89 tertutup · varian ${idn(r.months)} bulan`),
+    ].join("");
+    const cols = [["scrap", "Scrap", "--series-1"], ["variant", "Modifikasi varian", "--series-2"], ["labor", "Waktu operator", "--series-3"], ["maint", "Perawatan", "--series-4"], ["energy", "Energi", "--series-5"]];
+    $("legFin").innerHTML = cols.map(([, lab, c]) => `<span><i class="box" style="background:${css(c)}"></i>${lab}</span>`).join("");
+    const o = baseOpts((v) => idn(v, 0));
+    o.scales.x.stacked = true; o.scales.y.stacked = true;
+    o.plugins.tooltip.callbacks = { label: (c) => ` ${c.dataset.label}: ${rp(c.parsed.y)}`, footer: (items) => `Total: ${rp(items.reduce((a, i) => a + i.parsed.y, 0))}` };
+    draw("cFin", "bar", { labels: r.rows.map((x) => String(x.year)), datasets: cols.map(([k, lab, c]) => ({ label: lab, data: r.rows.map((x) => +x[k].toFixed(2)), backgroundColor: css(c), borderColor: css("--surface"), borderWidth: 1, maxBarThickness: 56 })) }, o);
+    const tr = (c, tag = "td") => "<tr>" + c.map((x, i) => `<${tag}${i ? ' class="n"' : ""}>${x}</${tag}>`).join("") + "</tr>";
+    $("tFin").innerHTML = tr(["Tahun", "Penghematan", "Investasi", "Biaya berjalan", "Arus kas bersih", "Kumulatif"], "th") +
+      r.rows.map((x) => tr([x.year, idn(x.sav), idn(x.inv), idn(x.run), idn(x.net), idn(x.cum)])).join("");
+    $("tScen").innerHTML = "<table><tr><th>Rp miliar</th>" + Object.keys(F.SCEN).map((k) => `<th class="n">${k[0].toUpperCase() + k.slice(1)}</th>`).join("") + "</tr>" +
+      [["Investasi", (s, x) => idn(s.capex, 0)], ["Penghematan run-rate", (s, x) => idn(x.runRate)], ["NPV 2026–2030", (s, x) => idn(x.npv)], ["Payback", (s, x) => x.payback || "Setelah 2030"], ["Indeks biaya 2030", (s, x) => idn(x.idx)]]
+        .map(([lab, f]) => `<tr><td>${lab}</td>` + Object.values(F.SCEN).map((s) => `<td class="n">${f(s, F.run({ ...s }))}</td>`).join("") + "</tr>").join("") + "</table>";
+    $("tBreak").innerHTML = "<table><tr><th class='n'>Investasi</th><th class='n'>Penghematan tahun 1</th><th class='n'>% biaya konversi</th><th class='n'>% selisih tertutup</th></tr>" +
+      [40, 60, 80, 100, 120].map((inv) => { const b = F.breakEven(inv); return `<tr class="${inv === fs.capex ? "sel" : ""}"><td class="n">Rp${inv} M</td><td class="n">${rp(b.first)}</td><td class="n">${pct(b.pctConv, 1)}</td><td class="n">${pct(b.shareGap)}</td></tr>`; }).join("") + "</table>";
+    const T = DATA.xl.tornado;
+    hbar("cTornXl", T.map((t) => t.name), T.map((t) => t.lo), T.map((t) => t.hi), (v) => idn(v, 0), () => css("--series-1"));
+  }
+
+  // ---------------------------------------------------------------- STRES
+  function rangeRows(boxId, rows, lo, hi) {
+    const pos = (v) => ((Math.min(Math.max(v, lo), hi) - lo) / (hi - lo)) * 100;
+    $(boxId).innerHTML = rows.map((r) => {
+      const t = `${r.lab}: P5 ${rp(r.p5)} · median ${rp(r.p50)} · P95 ${rp(r.p95)}${r.extra || ""}`;
+      return `<div class="r ${r.plan ? "plan" : ""}"><span>${esc(r.lab)}</span><div class="track" tabindex="0" data-tip="${esc(t)}" aria-label="${esc(t)}">
+        <span class="zero" style="left:${pos(0)}%"></span><span class="bar" style="left:${pos(r.p5)}%;width:${pos(r.p95) - pos(r.p5)}%"></span><span class="dot" style="left:${pos(r.p50)}%"></span></div>
+        <span class="p">${pct(r.p_pos)}</span></div>`;
+    }).join("") + `<div class="r"><span></span><div class="legend num" style="justify-content:space-between"><span>${rp(lo, 0)}</span><span>0</span><span>${rp(hi, 0)}</span></div><span class="p muted">P(NPV&gt;0)</span></div>`;
+  }
+  function renderStress() {
+    const S = DATA.sd.mc;
+    const sdRows = [["Rencana: pilot-light + gate", "CLK v2, pilot-light + gate", true], ["Pilot-light tanpa gate", "CLK v2, pilot-light, no gate"], ["Belanja di awal + gate", "CLK v2, front-loaded + gate"],
+      ["Belanja di awal tanpa gate", "CLK v2, front-loaded, no gate"], ["Loop gagal: pilot-light + gate", "FAILURE (adoption 20-60%): pilot-light + gate"],
+      ["Loop gagal: belanja di awal + gate", "FAILURE (adoption 20-60%): front-loaded + gate"], ["Tanpa perlindungan waktu (v1)", "CLK v1 (no protected time) + gate"],
+      ["Lindungi 40% waktu", "CLK v2 protecting 40% + gate"], ["Rencana, terlambat 1 tahun", "CLK v2, 1 year late + gate"]]
+      .map(([lab, k, plan]) => ({ lab, plan, ...S[k], extra: ` · gate berhenti ${pct(S[k].gate_stop)}` }));
+    rangeRows("mcBox", sdRows, -35, 75);
+    const XN = { A: "Belanja di awal, tanpa gate", B: "Belanja di awal + gate (65% sudah terpakai)", C: "Pilot-light, tanpa gate", D: "Rencana: pilot-light + gate",
+      E: "Rencana + nilai sisa peralatan", F: "Rencana, terlambat 1 tahun", G: "Terlambat 1 tahun + nilai sisa" };
+    rangeRows("xlBox", DATA.xl.strategies.map((s) => ({ lab: XN[s.id], plan: s.id === "D", p5: s.p5, p50: s.p50, p95: s.p95, p_pos: s.prob_pos })), -45, 75);
+    $("xlGate").textContent = pct(DATA.xl.gateStop);
+    const NAMES = { capex: "Investasi", cplx_post: "Laju kompleksitas", nva_red: "Penurunan NVA", var_red: "Penurunan biaya varian", scope: "Cakupan scrap loop",
+      adopt: "Adopsi", sprint: "Sprint know-how", idea_gain: "Efek kanal ide", dt_red: "Penurunan downtime", vis_gain: "Visibilitas penyebab", tools_gain: "Efek alat buatan sendiri",
+      tr_hc: "Target kepatuhan alert", build: "Laju pulih kapabilitas", cash_conv: "Waktu menjadi kas", e_red: "Penurunan energi", k_std_gain: "Standarisasi know-how",
+      build_per_eng: "Laju bangun per engineer", unserved_gen: "Efek masalah tak tertangani" };
+    const T = DATA.sd.tornado.slice(0, 10);
+    hbar("cTornSd", T.map((t) => NAMES[t.name] || t.name), T.map((t) => t.lo), T.map((t) => t.hi), (v) => idn(v, 0), () => css("--series-1"));
+  }
+  const tip = $("tip");
+  document.addEventListener("pointermove", (ev) => {
+    const t = ev.target.closest && ev.target.closest(".track"); if (!t) { tip.hidden = true; return; }
+    tip.textContent = t.dataset.tip; tip.hidden = false;
+    tip.style.left = Math.min(ev.clientX + 12, window.innerWidth - 290) + "px"; tip.style.top = ev.clientY + 14 + "px";
+  });
+
+  // ---------------------------------------------------------------- KEBERLANJUTAN
+  function renderSus() {
+    const e = DEF0.e, co = e.tco2.map((r) => Math.round(r.tco2));
+    const cum30 = e.tco2.filter((r) => r.year <= 2030).reduce((a, r) => a + r.tco2, 0), cum35 = e.tco2.reduce((a, r) => a + r.tco2, 0);
+    const scrapV = M.annual(DEF0.plan, "scrap", 2030) / M.annual(DEF0.base, "scrap", 2030) - 1;
+    const soc = DATA.sd.social["2030"];
+    $("susTiles").innerHTML = [
+      tile("CO₂ dihindari 2030", idn(co[4], 0) + " t", `Kumulatif ${idn(cum30, 0)} t (2026–30), ${idn(cum35, 0)} t (2026–35)`),
+      tile("Scrap (material terbuang)", pct(scrapV), "2030, vs tanpa tindakan"),
+      tile("Ketergantungan pada 1–2 senior", `48% → ${pct(soc.senior_dep)}`, `Engineer baru mandiri ${idn(soc.ramp_months)} bulan (hari ini 15)`),
+      tile("Ketahanan 2035", idn(M.annual(DEF0.plan, "cost_idx_real", 2035)), `Bila program dihentikan 2031: ${idn(M.annual(DEF0.relapse, "cost_idx_real", 2035))}`, `<span class="pill warn">! Butuh pemeliharaan</span>`),
+    ].join("");
+    const o = baseOpts((v) => idn(v, 0));
+    o.interaction = { mode: "nearest", intersect: true };
+    o.plugins.tooltip.callbacks = { label: (c) => ` CO₂ dihindari: ${idn(c.parsed.y, 0)} ton` };
+    draw("cCo2", "bar", { labels: e.tco2.map((r) => String(r.year)), datasets: [{ label: "CO₂", data: co, backgroundColor: css("--series-3"), borderRadius: 4, borderSkipped: "start", maxBarThickness: 28 }] }, o);
+    draw("cDur", "line", { labels: YRS, datasets: [line("Cara kerja dipertahankan", ann(DEF0.plan, "cost_idx_real"), css("--series-1")), line("Program dihentikan 2031", ann(DEF0.relapse, "cost_idx_real"), css("--series-2"), true, 2),
+      line("Tanpa tindakan", ann(DEF0.base, "cost_idx_real"), css("--baseline"), false, 2)] }, baseOpts((v) => idn(v, 0), 90, 125));
+    const S = DATA.sd.social, rows = [["Engineer Software & AI L3+ (dari 30)", "digital_l3", (v) => idn(v)], ["Know-how kritis terdokumentasi", "know_how", pct],
+      ["Proses bergantung 1–2 senior", "senior_dep", pct], ["Engineer baru hingga mandiri (bulan)", "ramp_months", (v) => idn(v)], ["Waktu engineer untuk perbaikan", "improve", pct],
+      ["Ide terimplementasi per engineer", "ideas", (v) => idn(v, 2)]];
+    $("tSocial").innerHTML = "<table><tr><th>Ukuran</th><th class='n'>2025</th><th class='n'>2030</th><th class='n'>2035</th></tr>" +
+      rows.map(([lab, k, f]) => `<tr><td>${lab}</td>${["2025", "2030", "2035"].map((y) => `<td class="n">${f(S[y][k])}</td>`).join("")}</tr>`).join("") +
+      "</table><p class='note' style='margin-top:8px'>Tanpa PHK: hanya 50% waktu operator yang dibebaskan dihitung sebagai kas; sisanya dialihkan ke kaizen.</p>";
+  }
+
+  // ---------------------------------------------------------------- ROADMAP, KPI, Q&A
+  function renderRoad() {
+    const R = DATA.road;
+    $("tPhase").innerHTML = mdTable(R.phases); $("tGate").innerHTML = mdTable(R.gate); $("tDays").innerHTML = mdTable(R.days);
+    $("tCap").innerHTML = mdTable(R.capability); $("tBuild").innerHTML = mdTable(R.build);
+    const [head, ...body] = R.risks;
+    const si = head.indexOf("Skor");
+    $("tRisk").innerHTML = `<table><tr>${head.map((h) => `<th>${esc(h)}</th>`).join("")}</tr>` + body.map((r) => `<tr>${r.map((c, i) => {
+      if (i !== si) return `<td>${esc(c)}</td>`;
+      const v = +c, cls = v >= 15 ? "bad" : v >= 10 ? "warn" : "good";
+      return `<td><span class="risk pill ${cls}">${esc(c)}</span></td>`;
+    }).join("")}</tr>`).join("") + "</table>";
+  }
+  function renderKpi() {
+    const K = DATA.kpi;
+    $("tKpiO").innerHTML = mdTable(K.outcome); $("tKpiD").innerHTML = mdTable(K.driver); $("tKpiS").innerHTML = mdTable(K.sustain); $("tKpiF").innerHTML = mdTable(K.fixes);
+  }
+  // ---------------------------------------------------------------- tabs
+  const RENDER = { ringkasan: renderSummary, diagnosis: renderDiag, solusi: renderScore, bukti: renderProof, simulator: renderSim, finansial: renderFin,
+    stres: renderStress, keberlanjutan: renderSus, roadmap: renderRoad, kpi: renderKpi };
+  let current = null;
+  function show(name) {
+    if (!RENDER[name]) name = "ringkasan";
+    current = name;
+    document.querySelectorAll("section[data-tab]").forEach((s) => { s.hidden = s.dataset.tab !== name; });
+    document.querySelectorAll("#rail a").forEach((a) => { if (a.getAttribute("href") === "#" + name) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+    RENDER[name]();
+    Object.values(charts).forEach((c) => { if (c.canvas.offsetParent) c.resize(); });
+    store.set("clk-tab", name);
+  }
+  window.addEventListener("hashchange", () => show(location.hash.slice(1)));
+  show(location.hash.slice(1) || store.get("clk-tab", "ringkasan"));
+  const rerender = () => { Object.values(charts).forEach((c) => c.destroy()); for (const k in charts) delete charts[k]; show(current); };
+  try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", rerender); } catch (e) {}
+  new MutationObserver(rerender).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+})();
+</script>

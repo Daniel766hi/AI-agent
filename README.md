@@ -224,6 +224,7 @@ strategy selection does.
 | `quant/risk.py` | Cost drag, break-even, ruin probability, Kelly |
 | `analyze.py` | What profit requires and what prevents it |
 | `tests/` | Self-checks, plain asserts, no framework |
+| `cases/` | Unrelated case-competition projects, kept apart from the trading code |
 
 ## Writing a strategy
 
